@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+build/
+prisma/*.db
+prisma/*.db-journal
+prisma/*.db-wal
+prisma/*.db-shm
+*.log
+.DS_Store
