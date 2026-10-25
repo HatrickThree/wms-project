@@ -31,22 +31,28 @@ export default function RootLayout({
               1. ภาพรวมคลังสินค้า (Dashboard)
             </Link>
             <Link
+              href="/inventory"
+              className="block px-3 py-2.5 rounded-lg bg-blue-600/20 text-blue-300 font-semibold hover:bg-slate-800 transition"
+            >
+              2. ค้นหาคลังสินค้า & กรอง S/N
+            </Link>
+            <Link
               href="/inbound"
               className="block px-3 py-2.5 rounded-lg hover:bg-slate-800 transition"
             >
-              2. รับสินค้าเข้า + ยิง S/N (Inbound)
+              3. รับสินค้าเข้า + ยิง S/N (Inbound)
             </Link>
             <Link
               href="/outbound"
               className="block px-3 py-2.5 rounded-lg hover:bg-slate-800 transition"
             >
-              3. หยิบจ่ายสินค้าด้วย S/N (Outbound)
+              4. หยิบจ่ายสินค้าด้วย S/N (Outbound)
             </Link>
             <Link
               href="/serials"
               className="block px-3 py-2.5 rounded-lg hover:bg-slate-800 transition"
             >
-              4. ตรวจสอบประวัติ S/N (Traceability)
+              5. ตรวจสอบประวัติ S/N รายชิ้น
             </Link>
           </nav>
         </aside>
