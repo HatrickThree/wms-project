@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -45,7 +44,8 @@ import {
 } from "./common";
 import { useUnsavedChanges } from "@/components/layout/navigation-guard";
 import { InboundReceiveSchema } from "@/lib/validations/wms.schema";
-import { ApiError, request } from "@/lib/wms";
+import { ApiError, request, resolveScannedProduct } from "@/lib/wms";
+import { ScanInput } from "./scan-input";
 
 const initial = {
   referenceDoc: "",
@@ -200,7 +200,8 @@ export function InboundScreen() {
               <Button
                 variant="outline"
                 disabled={
-                  busy || uncertain ||
+                  busy ||
+                  uncertain ||
                   (!dirty && !Object.values(form).some((value) => value.trim()))
                 }
               >
@@ -290,7 +291,27 @@ export function InboundScreen() {
                         </span>
                       )}
                     </Label>
-                    <Input
+                    <ScanInput
+                      scannerEnabled={
+                        key === "sku" || key === "locationBarcode"
+                      }
+                      scannerTitle={
+                        key === "sku"
+                          ? "สแกน SKU / บาร์โค้ดสินค้า"
+                          : "สแกนชั้นวางปลายทาง"
+                      }
+                      onScanValue={async (value) => {
+                        const resolved =
+                          key === "sku"
+                            ? await resolveScannedProduct(value)
+                            : value;
+                        setForm((previous) => ({
+                          ...previous,
+                          [key]: resolved,
+                        }));
+                        setSaved(false);
+                        setErrors((previous) => ({ ...previous, [key]: "" }));
+                      }}
                       id={`inbound-${key}`}
                       value={form[key]}
                       onChange={(event) => {
@@ -351,7 +372,15 @@ export function InboundScreen() {
               >
                 <Label htmlFor="inbound-serialNumbers">Serial Number</Label>
                 <div className="mt-2 flex gap-2">
-                  <Input
+                  <ScanInput
+                    scannerTitle="สแกน Serial สำหรับรับเข้า"
+                    onScanValue={(value) => {
+                      setSerial(value);
+                      setErrors((previous) => ({
+                        ...previous,
+                        serialNumbers: "",
+                      }));
+                    }}
                     ref={input}
                     id="inbound-serialNumbers"
                     value={serial}

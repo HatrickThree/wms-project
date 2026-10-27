@@ -15,6 +15,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { prisma } from "@/lib/db";
+import type { WorkspaceAccess } from "@/lib/auth";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { movementLabels } from "@/lib/wms";
 import { PageHeader, EmptyState } from "@/components/wms/common";
@@ -37,26 +38,29 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
-async function loadDashboard() {
+async function loadDashboard(workspaceId: string) {
   const [products, available, movements, locations] = await Promise.all([
     prisma.product.findMany({
+      where: { workspaceId },
       include: { inventories: { include: { location: true } } },
       orderBy: { sku: "asc" },
     }),
     prisma.serialItem.groupBy({
       by: ["productId"],
       where: {
+        workspaceId,
         status: "IN_STOCK",
         location: { type: { in: ["STORAGE", "PICKING"] } },
       },
       _count: { _all: true },
     }),
     prisma.stockLedger.findMany({
+      where: { workspaceId },
       take: 7,
       orderBy: { createdAt: "desc" },
       include: { product: true, serialItem: true },
     }),
-    prisma.location.count(),
+    prisma.location.count({ where: { workspaceId } }),
   ]);
   const readyMap = new Map(
     available.map((item) => [item.productId, item._count._all]),
@@ -98,8 +102,8 @@ async function loadDashboard() {
   };
 }
 
-export async function Dashboard() {
-  const data = await loadDashboard().catch(() => null);
+export async function Dashboard({ access }: { access: WorkspaceAccess }) {
+  const data = await loadDashboard(access.workspace.id).catch(() => null);
   const cards = [
     {
       label: "สินค้าในคลัง",
@@ -187,7 +191,7 @@ export async function Dashboard() {
             <div className="mt-5 flex flex-wrap items-center gap-4 text-xs text-slate-300">
               <span className="flex items-center gap-1.5">
                 <Boxes className="size-3.5" />
-                ขอบเขต: ทุกคลังสินค้า
+                ขอบเขต: {access.workspace.name}
               </span>
               <span className="flex items-center gap-1.5">
                 <Clock3 className="size-3.5" />
@@ -241,7 +245,7 @@ export async function Dashboard() {
             <div>
               <CardTitle>การเคลื่อนไหวล่าสุด</CardTitle>
               <CardDescription className="mt-1">
-                รายการที่บันทึกแล้วจากทุกคลัง
+                รายการที่บันทึกแล้วในพื้นที่ปัจจุบัน
               </CardDescription>
             </div>
             <span className="flex size-9 items-center justify-center rounded-lg bg-muted">

@@ -25,7 +25,6 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -42,6 +41,7 @@ import {
   type SerialDetail,
 } from "@/lib/wms";
 import { formatDate } from "@/lib/utils";
+import { ScanInput } from "./scan-input";
 
 function SerialsContent() {
   const params = useSearchParams();
@@ -113,7 +113,9 @@ function SerialsContent() {
             <div className="mt-2 flex flex-col gap-3 sm:flex-row">
               <div className="relative flex-1">
                 <ScanLine className="pointer-events-none absolute left-4 top-4 size-5 text-muted-foreground" />
-                <Input
+                <ScanInput
+                  scannerTitle="สแกน Serial เพื่อค้นประวัติ"
+                  onScanValue={setValue}
                   ref={input}
                   id="serial-lookup"
                   value={value}

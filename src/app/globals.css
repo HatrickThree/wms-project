@@ -51,6 +51,47 @@
   }
 }
 
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  body:has([data-wms-label-sheet]) {
+    background: white;
+  }
+  body:has([data-wms-label-sheet]) aside,
+  body:has([data-wms-label-sheet]) header,
+  body:has([data-wms-label-sheet]) footer,
+  body:has([data-wms-label-sheet]) .labels-controls,
+  body:has([data-wms-label-sheet]) [data-sonner-toaster] {
+    display: none !important;
+  }
+  body:has([data-wms-label-sheet]) .wms-app-content,
+  body:has([data-wms-label-sheet]) main {
+    padding: 0 !important;
+  }
+  [data-wms-label-sheet] {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 4mm !important;
+  }
+  .wms-print-label {
+    break-inside: avoid;
+    min-height: 54mm;
+    border: 0.2mm solid #888;
+    border-radius: 0;
+    padding: 3mm;
+    color: black;
+  }
+  .wms-print-label img {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .wms-print-label p {
+    color: black;
+  }
+}
+
 @layer components {
   .page-container {
     @apply mx-auto w-full max-w-[1480px] space-y-6;

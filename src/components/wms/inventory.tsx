@@ -81,6 +81,7 @@ import {
   serialStatuses,
 } from "@/lib/wms";
 import { formatDate, formatNumber } from "@/lib/utils";
+import { ScanInput } from "./scan-input";
 
 const emptyFilters = {
   keyword: "",
@@ -463,7 +464,9 @@ function InventoryContent() {
                 ค้นหา SKU ชื่อสินค้า Serial Lot หรือเอกสาร
               </label>
               <Search className="pointer-events-none absolute left-3 top-4 size-4 text-muted-foreground" />
-              <Input
+              <ScanInput
+                scannerTitle="สแกนรหัสเพื่อค้นหาสต็อก"
+                onScanValue={(value) => change("keyword", value)}
                 id="inventory-keyword"
                 value={filters.keyword}
                 onChange={(event) => change("keyword", event.target.value)}
@@ -617,7 +620,7 @@ function InventoryContent() {
                         <TableHead>ตำแหน่งจัดเก็บ</TableHead>
                         <TableHead className="text-right">S/N ที่พบ</TableHead>
                         <TableHead className="text-right">
-                    อยู่ในคลังที่พบ
+                          อยู่ในคลังที่พบ
                         </TableHead>
                         <TableHead>
                           <span className="sr-only">ดูรายการ</span>

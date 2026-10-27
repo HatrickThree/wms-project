@@ -68,8 +68,22 @@ export interface InventoryResult {
   };
 }
 export class ApiError extends Error {}
+export async function resolveScannedProduct(code: string) {
+  const product = await request<{ sku: string }>(
+    `/api/scan/product?code=${encodeURIComponent(code)}`,
+  );
+  return product.sku;
+}
 export async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { cache: "no-store", ...init });
+  const headers = new Headers(init?.headers);
+  const workspaceId =
+    typeof document === "undefined"
+      ? null
+      : document
+          .querySelector("[data-workspace-id]")
+          ?.getAttribute("data-workspace-id");
+  if (workspaceId) headers.set("x-workspace-id", workspaceId);
+  const response = await fetch(url, { cache: "no-store", ...init, headers });
   const result = await response.json();
   if (!response.ok || !result.success)
     throw new ApiError(

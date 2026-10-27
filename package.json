@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "check": "node scripts/check-build.mjs",
     "start": "next start",
     "lint": "next lint",
     "db:setup": "prisma db push && tsx prisma/seed.ts",

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -12,7 +12,11 @@ import {
   LayoutDashboard,
   MapPin,
   Menu,
+  LogOut,
+  UsersRound,
+  PanelsTopLeft,
   Package,
+  QrCode,
   PanelLeftClose,
   PanelLeftOpen,
   ScanLine,
@@ -28,9 +32,16 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { NavigationGuard, useGuardedNavigation } from "./navigation-guard";
+import {
+  NavigationGuard,
+  useGuardedAction,
+  useGuardedNavigation,
+} from "./navigation-guard";
 import { cn } from "@/lib/utils";
 import { Toaster } from "sonner";
+import { toast } from "sonner";
+import { request } from "@/lib/wms";
+import { roleLabels, type SessionProfile } from "@/lib/session-types";
 
 const navigation = [
   { href: "/", label: "ภาพรวมคลัง", icon: LayoutDashboard },
@@ -38,17 +49,45 @@ const navigation = [
   { href: "/inbound", label: "รับสินค้าเข้า", icon: ArrowDownToLine },
   { href: "/outbound", label: "จ่ายสินค้าออก", icon: ArrowUpFromLine },
   { href: "/serials", label: "ประวัติ Serial", icon: History },
+  { href: "/labels", label: "ป้าย QR / บาร์โค้ด", icon: QrCode },
 ];
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({
+  children,
+  profile,
+}: {
+  children: React.ReactNode;
+  profile: SessionProfile;
+}) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const navigate = useGuardedNavigation();
-  const active = navigation.find((item) => item.href === pathname);
+  const guardedAction = useGuardedAction();
+  const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
+  const menuItems = [
+    ...navigation,
+    {
+      href: "/workspaces",
+      label: "พื้นที่ธุรกิจ / การฝึก",
+      icon: PanelsTopLeft,
+    },
+    ...(profile.user.role === "ADMIN"
+      ? [{ href: "/admin/users", label: "บัญชีผู้ใช้", icon: UsersRound }]
+      : []),
+  ];
+  const active = menuItems.find((item) => item.href === pathname);
+  const signOut = () => guardedAction(() => {
+    setMobileOpen(false);
+    setSigningOut(true);
+    request("/api/auth/logout", { method: "POST" })
+      .then(() => { router.replace("/login"); router.refresh(); })
+      .catch(() => { toast.error("ยังออกจากระบบไม่ได้ กรุณาลองใหม่"); setSigningOut(false); });
+  });
   const links = (compact = false) => (
     <nav aria-label="เมนูหลัก" className="space-y-1.5">
-      {navigation.map(({ href, label, icon: Icon }) => (
+      {menuItems.map(({ href, label, icon: Icon }) => (
         <Link
           key={href}
           href={href}
@@ -77,7 +116,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     </nav>
   );
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-dvh" data-workspace-id={profile.workspace?.id || ""}>
       <a
         href="#main-content"
         className="sr-only z-[100] focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:rounded-lg focus:bg-white focus:p-3 focus:text-primary"
@@ -86,7 +125,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       </a>
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-slate-800 bg-[#101b30] text-white lg:flex",
+          "fixed inset-y-0 left-0 z-40 hidden flex-col overflow-y-auto border-r border-slate-800 bg-[#101b30] text-white lg:flex",
           collapsed ? "w-20 px-3" : "w-[248px] px-4",
         )}
       >
@@ -118,6 +157,34 @@ function Shell({ children }: { children: React.ReactNode }) {
           </p>
         )}
         {links(collapsed)}
+        <div className="mt-3 border-t border-slate-700/60 pt-3">
+          {!collapsed && (
+            <div className="mb-2 px-3 text-xs text-slate-300">
+              <Link
+                href="/account"
+                className="block truncate font-medium underline-offset-4 hover:underline"
+              >
+                {profile.user.displayName}
+              </Link>
+              <p className="mt-1 text-slate-400">
+                {roleLabels[profile.user.role]}
+              </p>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            className={cn(
+              "text-slate-300 hover:bg-slate-800 hover:text-white",
+              !collapsed && "w-full justify-start",
+            )}
+            aria-label="ออกจากระบบ"
+            disabled={signingOut}
+            onClick={signOut}
+          >
+            <LogOut />
+            {!collapsed && (signingOut ? "กำลังออก…" : "ออกจากระบบ")}
+          </Button>
+        </div>
         <div className="mt-auto space-y-4 pb-5 pt-8">
           {!collapsed && (
             <div className="rounded-xl border border-slate-700/70 bg-slate-800/60 p-4">
@@ -154,7 +221,12 @@ function Shell({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </aside>
-      <div className={cn("min-w-0", collapsed ? "lg:pl-20" : "lg:pl-[248px]")}>
+      <div
+        className={cn(
+          "min-w-0 wms-app-content",
+          collapsed ? "lg:pl-20" : "lg:pl-[248px]",
+        )}
+      >
         <header className="sticky top-0 z-30 flex min-h-[72px] items-center gap-3 border-b bg-white/95 px-4 backdrop-blur-md sm:px-6 lg:px-8">
           <Button
             variant="ghost"
@@ -167,7 +239,24 @@ function Shell({ children }: { children: React.ReactNode }) {
           </Button>
           <div className="flex min-w-0 items-center gap-2 text-sm">
             <Warehouse className="hidden size-4 text-muted-foreground sm:block" />
-            <span className="truncate font-medium">ทุกคลังสินค้า</span>
+            <Link
+              href="/workspaces"
+              className="truncate font-medium underline-offset-4 hover:underline"
+            >
+              {profile.workspace?.name || "เลือกพื้นที่ทำงาน"}
+            </Link>
+            {profile.workspace && (
+              <span
+                className={cn(
+                  "shrink-0 rounded px-2 py-1 text-[10px] font-medium",
+                  profile.workspace.type === "TRAINING"
+                    ? "bg-amber-100 text-amber-900"
+                    : "bg-blue-50 text-blue-800",
+                )}
+              >
+                {profile.workspace.type === "TRAINING" ? "โหมดฝึก" : "ธุรกิจ"}
+              </span>
+            )}
             <ChevronRight className="hidden size-3 text-slate-400 sm:block" />
             <span className="hidden text-muted-foreground sm:block">
               {active?.label || "พื้นที่ทำงาน"}
@@ -244,6 +333,14 @@ function Shell({ children }: { children: React.ReactNode }) {
             </SheetDescription>
           </SheetHeader>
           {links()}
+          <div className="space-y-3 border-t border-slate-700 pt-4">
+            <Link href="/account" onClick={() => setMobileOpen(false)} className="block text-sm underline-offset-4 hover:underline">
+              {profile.user.displayName} · {roleLabels[profile.user.role]}
+            </Link>
+            <Button variant="ghost" className="w-full justify-start text-slate-300 hover:bg-slate-800 hover:text-white" disabled={signingOut} onClick={signOut}>
+              <LogOut />{signingOut ? "กำลังออก…" : "ออกจากระบบ"}
+            </Button>
+          </div>
           <p className="mt-auto flex items-center gap-2 text-xs text-slate-400">
             <CircleHelp className="size-4" />
             เลือกงานที่ต้องการจากเมนูด้านบน
@@ -254,10 +351,16 @@ function Shell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  profile,
+}: {
+  children: React.ReactNode;
+  profile: SessionProfile;
+}) {
   return (
     <NavigationGuard>
-      <Shell>{children}</Shell>
+      <Shell profile={profile}>{children}</Shell>
     </NavigationGuard>
   );
 }

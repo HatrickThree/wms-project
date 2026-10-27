@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -45,6 +44,7 @@ import {
 } from "./common";
 import { useUnsavedChanges } from "@/components/layout/navigation-guard";
 import { OutboundPickSchema } from "@/lib/validations/wms.schema";
+import { ScanInput } from "./scan-input";
 import { ApiError, request, type SerialDetail } from "@/lib/wms";
 import { formatDate } from "@/lib/utils";
 
@@ -283,7 +283,10 @@ export function OutboundScreen() {
                           *
                         </span>
                       </Label>
-                      <Input
+                      <ScanInput
+                        scannerEnabled={key === "locationBarcode"}
+                        scannerTitle="สแกนชั้นวางต้นทาง"
+                        onScanValue={(value) => update(key, value)}
                         id={`outbound-${key}`}
                         value={form[key]}
                         onChange={(event) => update(key, event.target.value)}
@@ -317,7 +320,9 @@ export function OutboundScreen() {
                     <ScanLine className="size-4 text-primary" />
                     Serial Number
                   </Label>
-                  <Input
+                  <ScanInput
+                    scannerTitle="สแกน Serial สำหรับจ่ายออก"
+                    onScanValue={(value) => update("serialNumber", value)}
                     id="outbound-serialNumber"
                     ref={input}
                     value={form.serialNumber}
