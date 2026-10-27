@@ -2,7 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background-color: #f8fafc;
-  color: #0f172a;
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 224 76% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 25% 35%;
+    --accent: 214 95% 95%;
+    --accent-foreground: 224 76% 38%;
+    --destructive: 0 74% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 215 16% 47%;
+    --ring: 224 76% 48%;
+    --radius: 0.75rem;
+  }
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Leelawadee UI", "Noto Sans Thai", Tahoma, Arial, sans-serif;
+  }
+  ::selection {
+    @apply bg-blue-100 text-blue-950;
+  }
+  :focus-visible {
+    outline-offset: 3px;
+  }
+  input[type="date"] {
+    min-width: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .page-container {
+    @apply mx-auto w-full max-w-[1480px] space-y-6;
+  }
+  .field-group {
+    @apply space-y-2;
+  }
+  .mono {
+    @apply font-mono tracking-tight;
+  }
 }

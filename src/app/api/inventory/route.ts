@@ -1,26 +1,30 @@
 import { NextResponse } from "next/server";
 import { WmsService } from "@/services/wms.service";
+import { InventorySearchSchema } from "@/lib/validations/wms.schema";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const filters = {
-      keyword: searchParams.get("keyword") ?? undefined,
-      category: searchParams.get("category") ?? undefined,
-      zone: searchParams.get("zone") ?? undefined,
-      locationBarcode: searchParams.get("locationBarcode") ?? undefined,
-      status: searchParams.get("status") ?? undefined,
-      docNo: searchParams.get("docNo") ?? undefined,
-      lotNumber: searchParams.get("lotNumber") ?? undefined,
-      dateFrom: searchParams.get("dateFrom") ?? undefined,
-      dateTo: searchParams.get("dateTo") ?? undefined,
-    };
+    const parsed = InventorySearchSchema.safeParse(
+      Object.fromEntries(searchParams),
+    );
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.issues[0].message },
+        { status: 400 },
+      );
+    }
 
-    const result = await WmsService.searchWarehouseInventory(filters);
+    const result = await WmsService.searchWarehouseInventory(parsed.data);
     return NextResponse.json({ success: true, data: result });
   } catch (error: unknown) {
     const message =
-      error instanceof Error ? error.message : "เกิดข้อผิดพลาดในการค้นหาข้อมูลคลังสินค้า";
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+      error instanceof Error
+        ? error.message
+        : "เกิดข้อผิดพลาดในการค้นหาข้อมูลคลังสินค้า";
+    return NextResponse.json(
+      { success: false, error: message },
+      { status: 500 },
+    );
   }
 }

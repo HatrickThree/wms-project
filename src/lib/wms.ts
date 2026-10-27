@@ -1,0 +1,87 @@
+export const serialStatuses = {
+  IN_STOCK: "อยู่ในคลัง",
+  ALLOCATED: "จองแล้ว",
+  SHIPPED: "จ่ายออกแล้ว",
+  RETURNED: "รับคืน / รอตรวจ",
+  DEFECTIVE: "ชำรุด",
+} as const;
+export const movementLabels: Record<string, string> = {
+  INBOUND_RECEIVE: "รับสินค้าเข้า",
+  PUTAWAY: "จัดเก็บเข้าชั้นวาง",
+  INTERNAL_TRANSFER: "ย้ายชั้นวาง",
+  OUTBOUND_PICK: "จ่ายสินค้าออก",
+  RETURN_IN: "รับสินค้าคืน",
+  ADJUSTMENT_PLUS: "ปรับยอดเพิ่ม",
+  ADJUSTMENT_MINUS: "ปรับยอดลด",
+};
+export interface SerialRecord {
+  id: string;
+  serialNumber: string;
+  status: string;
+  lotNumber: string | null;
+  inboundDocNo: string;
+  outboundDocNo: string | null;
+  receivedAt: string;
+  shippedAt: string | null;
+  product: {
+    sku: string;
+    name: string;
+    barcode: string;
+    category: string | null;
+    baseUom: string;
+  };
+  location: { barcode: string; zone: string; type: string } | null;
+}
+export interface SerialDetail extends SerialRecord {
+  movements: {
+    id: string;
+    movementType: string;
+    referenceDoc: string;
+    qtyChange: number;
+    note: string | null;
+    createdAt: string;
+    performedBy: string;
+  }[];
+}
+export interface InventoryResult {
+  serialItems: SerialRecord[];
+  groupedSummary: {
+    sku: string;
+    productName: string;
+    category: string;
+    locationBarcode: string;
+    zone: string;
+    inStockCount: number;
+    totalMatchedCount: number;
+    serialNumbers: {
+      serialNumber: string;
+      status: string;
+      lotNumber: string | null;
+      inboundDocNo: string;
+      receivedAt: string;
+    }[];
+  }[];
+  filterOptions: {
+    categories: string[];
+    zones: string[];
+    locationBarcodes: string[];
+  };
+}
+export class ApiError extends Error {}
+export async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, { cache: "no-store", ...init });
+  const result = await response.json();
+  if (!response.ok || !result.success)
+    throw new ApiError(
+      result.error || "ไม่สามารถทำรายการได้ กรุณาตรวจสอบข้อมูลแล้วลองใหม่",
+    );
+  return result.data as T;
+}
+export function currentLocation(
+  item: Pick<SerialRecord, "location" | "status">,
+) {
+  return (
+    item.location?.barcode ||
+    (item.status === "SHIPPED" ? "จ่ายออกจากคลังแล้ว" : "ไม่ระบุตำแหน่ง")
+  );
+}

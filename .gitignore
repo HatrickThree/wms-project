@@ -8,3 +8,4 @@ prisma/*.db-wal
 prisma/*.db-shm
 *.log
 .DS_Store
+*.tsbuildinfo

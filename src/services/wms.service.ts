@@ -306,10 +306,10 @@ export class WmsService {
     if (filters.dateFrom || filters.dateTo) {
       const receivedAtFilter: Record<string, Date> = {};
       if (filters.dateFrom) {
-        receivedAtFilter.gte = new Date(`${filters.dateFrom}T00:00:00.000Z`);
+        receivedAtFilter.gte = new Date(`${filters.dateFrom}T00:00:00.000+07:00`);
       }
       if (filters.dateTo) {
-        receivedAtFilter.lte = new Date(`${filters.dateTo}T23:59:59.999Z`);
+        receivedAtFilter.lte = new Date(`${filters.dateTo}T23:59:59.999+07:00`);
       }
       whereClause.receivedAt = receivedAtFilter;
     }
