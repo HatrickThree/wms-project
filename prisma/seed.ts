@@ -8,6 +8,14 @@ import {
 const prisma = new PrismaClient();
 
 async function main() {
+  if (
+    (await prisma.user.count()) ||
+    (await prisma.stockLedger.count()) ||
+    (await prisma.inventoryBalance.count())
+  )
+    throw new Error(
+      "Seed requires an empty disposable database; existing users or stock found.",
+    );
   console.log("Seeding In-House WMS SQLite database with rich sample data...");
   const workspace = await prisma.workspace.upsert({
     where: { id: "business-main" },
@@ -255,6 +263,35 @@ async function main() {
   const balanceCounts: Record<string, number> = {};
   for (const s of activeSerials) {
     if (!s.locationId) continue;
+    const lot = s.lotNumber
+      ? await prisma.stockLot.upsert({
+          where: {
+            productId_number: { productId: s.productId, number: s.lotNumber },
+          },
+          create: {
+            workspaceId: workspace.id,
+            productId: s.productId,
+            number: s.lotNumber,
+          },
+          update: {},
+        })
+      : null;
+    const layer = await prisma.stockLayer.create({
+      data: {
+        workspaceId: workspace.id,
+        productId: s.productId,
+        locationId: s.locationId,
+        lotId: lot?.id,
+        referenceDoc: s.inboundDocNo,
+        receivedAt: s.receivedAt,
+        qtyOnHand: 1,
+        qtyAllocated: s.status === "ALLOCATED" ? 1 : 0,
+      },
+    });
+    await prisma.serialItem.update({
+      where: { id: s.id },
+      data: { stockLayerId: layer.id },
+    });
     const key = `${s.productId}::${s.locationId}`;
     balanceCounts[key] = (balanceCounts[key] || 0) + 1;
   }

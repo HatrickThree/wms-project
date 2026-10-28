@@ -27,7 +27,9 @@ export async function GET(request: Request) {
           workspaceId: access.workspace.id,
           OR: [{ sku: parsed.data }, { barcode: parsed.data }],
         },
-        select: { id: true, sku: true, name: true, barcode: true },
+        include: {
+          units: { where: { active: true }, orderBy: { factor: "asc" } },
+        },
         take: 2,
       });
       if (!products.length)

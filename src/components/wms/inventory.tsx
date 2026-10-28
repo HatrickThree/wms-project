@@ -580,7 +580,8 @@ function InventoryContent() {
           </Button>
         </div>
         <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-          ยอดจากรายการที่โหลดตามตัวกรองปัจจุบัน สูงสุด 300 S/N · ทุกคลังสินค้า
+          ยอดจากรายการที่โหลดตามตัวกรองปัจจุบัน สูงสุด 300 S/N ·
+          ทุกคลังในพื้นที่ปัจจุบัน
           {updatedAt && !loading && ` · อัปเดต ${formatDate(updatedAt, true)}`}
         </p>
         {error ? (

@@ -1,0 +1,8 @@
+BEGIN IMMEDIATE;
+CREATE TABLE "WorkspaceDeletion" (
+ "workspaceId" TEXT NOT NULL PRIMARY KEY,
+ "deletedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ "deletedBy" TEXT NOT NULL,
+ CONSTRAINT "WorkspaceDeletion_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+COMMIT;

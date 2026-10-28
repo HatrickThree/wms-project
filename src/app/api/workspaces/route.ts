@@ -9,12 +9,22 @@ import {
   workspaceVisibility,
 } from "@/lib/auth";
 import { CreateWorkspaceSchema } from "@/lib/validations/auth.schema";
+import { deletedWorkspaces } from "@/lib/workspace-state";
 
-export async function GET() {
+export async function GET(request: Request) {
   return apiHandler(async () => {
     const session = await requireSession();
+    const deleted = new URL(request.url).searchParams.get("deleted") === "1";
+    if (deleted && session.user.role !== "ADMIN")
+      throw new HttpError(
+        403,
+        "เฉพาะผู้ดูแลระบบที่ดูหรือกู้คืนพื้นที่ที่ลบได้",
+      );
+    const removed = await deletedWorkspaces();
     const workspaces = await prisma.workspace.findMany({
-      where: workspaceVisibility(session.user),
+      where: deleted
+        ? { id: { in: removed.map((row) => row.workspaceId) } }
+        : await workspaceVisibility(session.user),
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
@@ -28,7 +38,10 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
-        workspaces,
+        workspaces: workspaces.map((w) => ({
+          ...w,
+          deletion: removed.find((row) => row.workspaceId === w.id) || null,
+        })),
         activeWorkspaceId: session.activeWorkspaceId,
         role: session.user.role,
         userId: session.user.id,

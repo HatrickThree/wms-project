@@ -16,7 +16,12 @@ export async function POST(request: Request) {
       .object({ workspaceId: z.string().min(1).max(100) })
       .parse(await request.json());
     const workspace = await prisma.workspace.findFirst({
-      where: { id: input.workspaceId, ...workspaceVisibility(session.user) },
+      where: {
+        AND: [
+          { id: input.workspaceId },
+          await workspaceVisibility(session.user),
+        ],
+      },
     });
     if (!workspace) throw new HttpError(403, "ไม่มีสิทธิ์เข้าถึงพื้นที่นี้");
     await prisma.userSession.update({

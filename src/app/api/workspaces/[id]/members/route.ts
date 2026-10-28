@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { apiHandler } from "@/lib/api";
 import { HttpError, requireSameOrigin, requireSession } from "@/lib/auth";
+import { workspaceDeletion } from "@/lib/workspace-state";
 
 async function manageableWorkspace(id: string) {
   const session = await requireSession();
@@ -16,6 +17,8 @@ async function manageableWorkspace(id: string) {
   });
   if (!workspace || !["ADMIN", "INSTRUCTOR"].includes(session.user.role))
     throw new HttpError(403, "ไม่มีสิทธิ์จัดการสมาชิกพื้นที่นี้");
+  if (await workspaceDeletion(id))
+    throw new HttpError(403, "พื้นที่นี้ถูกลบออกจากการใช้งานแล้ว");
   return { workspace, user: session.user };
 }
 export async function GET(
@@ -62,6 +65,15 @@ export async function POST(
   return apiHandler(async () => {
     requireSameOrigin(request);
     const { workspace, user } = await manageableWorkspace((await params).id);
+    if (
+      await prisma.trainingRound.findUnique({
+        where: { workspaceId: workspace.id },
+      })
+    )
+      throw new HttpError(
+        409,
+        "รายชื่อรอบฝึกถูกเก็บไว้แล้ว หากเปลี่ยนทีมให้สร้างโจทย์ใหม่",
+      );
     const input = z
       .object({
         userId: z.string().min(1).max(100).optional(),
@@ -112,6 +124,15 @@ export async function DELETE(
   return apiHandler(async () => {
     requireSameOrigin(request);
     const { workspace } = await manageableWorkspace((await params).id);
+    if (
+      await prisma.trainingRound.findUnique({
+        where: { workspaceId: workspace.id },
+      })
+    )
+      throw new HttpError(
+        409,
+        "รายชื่อรอบฝึกถูกเก็บไว้แล้ว หากเปลี่ยนทีมให้สร้างโจทย์ใหม่",
+      );
     const { userId } = z
       .object({ userId: z.string().min(1).max(100) })
       .parse(await request.json());

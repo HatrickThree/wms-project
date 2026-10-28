@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { serialStatuses } from "@/lib/wms";
 import { cn } from "@/lib/utils";
+import { SpeechAnnouncement } from "./speech-guidance";
 
 export function PageHeader({
   eyebrow,
@@ -29,7 +30,7 @@ export function PageHeader({
           {description}
         </p>
       </div>
-      {action && <div className="flex shrink-0 gap-2">{action}</div>}
+      {action && <div className="flex shrink-0 flex-wrap gap-2">{action}</div>}
     </div>
   );
 }
@@ -39,7 +40,7 @@ export function StatusBadge({ status }: { status: string }) {
       ? "success"
       : status === "ALLOCATED"
         ? "warning"
-        : status === "DEFECTIVE"
+        : status === "DEFECTIVE" || status === "MISSING"
           ? "destructive"
           : status === "SHIPPED"
             ? "default"
@@ -115,6 +116,7 @@ export function Feedback({
     >
       {value.kind === "success" ? <CheckCircle2 /> : <AlertCircle />}
       <AlertDescription>
+        <SpeechAnnouncement text={value.text} />
         {value.text}
         {children && <div className="mt-3">{children}</div>}
       </AlertDescription>

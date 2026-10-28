@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       where: { username: user.username },
     });
     const workspace = await prisma.workspace.findFirst({
-      where: workspaceVisibility(user),
+      where: await workspaceVisibility(user),
       orderBy: { createdAt: "asc" },
       select: { id: true },
     });

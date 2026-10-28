@@ -67,6 +67,9 @@ CREATE TABLE "OrderLine" (
     "orderId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL,
+    "requestedQuantity" INTEGER NOT NULL DEFAULT 1,
+    "requestedUom" TEXT NOT NULL DEFAULT 'PCS',
+    "conversionFactor" INTEGER NOT NULL DEFAULT 1,
     CONSTRAINT "OrderLine_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "StockOrder" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "OrderLine_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
@@ -177,6 +180,7 @@ CREATE TEMP TABLE migration_check(ok INTEGER CHECK(ok=1));
 INSERT INTO migration_check SELECT CASE WHEN EXISTS(SELECT 1 FROM InventoryBalance b WHERE b.qtyOnHand<COALESCE((SELECT SUM(qtyOnHand) FROM StockLayer l WHERE l.productId=b.productId AND l.locationId=b.locationId),0) OR b.qtyAllocated<COALESCE((SELECT SUM(qtyAllocated) FROM StockLayer l WHERE l.productId=b.productId AND l.locationId=b.locationId),0) OR b.qtyAllocated>b.qtyOnHand) THEN 0 ELSE 1 END;
 INSERT INTO StockLayer(id,workspaceId,productId,locationId,receivedAt,referenceDoc,qtyOnHand,qtyAllocated)
 SELECT 'legacy-balance-'||b.id,b.workspaceId,b.productId,b.locationId,b.updatedAt,'LEGACY-BALANCE',b.qtyOnHand-COALESCE((SELECT SUM(qtyOnHand) FROM StockLayer l WHERE l.productId=b.productId AND l.locationId=b.locationId),0),b.qtyAllocated-COALESCE((SELECT SUM(qtyAllocated) FROM StockLayer l WHERE l.productId=b.productId AND l.locationId=b.locationId),0) FROM InventoryBalance b WHERE b.qtyOnHand>COALESCE((SELECT SUM(qtyOnHand) FROM StockLayer l WHERE l.productId=b.productId AND l.locationId=b.locationId),0);
+INSERT INTO migration_check SELECT CASE WHEN EXISTS(SELECT 1 FROM InventoryBalance b WHERE b.qtyOnHand<>COALESCE((SELECT SUM(qtyOnHand) FROM StockLayer l WHERE l.productId=b.productId AND l.locationId=b.locationId),0) OR b.qtyAllocated<>COALESCE((SELECT SUM(qtyAllocated) FROM StockLayer l WHERE l.productId=b.productId AND l.locationId=b.locationId),0)) THEN 0 ELSE 1 END;
 DROP TABLE migration_check;
 
 CREATE TRIGGER "Location_workspace_insert" BEFORE INSERT ON "Location" WHEN NOT EXISTS (SELECT 1 FROM "Warehouse" WHERE "id"=NEW."warehouseId" AND "workspaceId"=NEW."workspaceId") BEGIN SELECT RAISE(ABORT, 'Workspace reference mismatch'); END;
@@ -199,5 +203,15 @@ CREATE TRIGGER "InventoryBalance_nonnegative_guard_insert" BEFORE INSERT ON "Inv
 CREATE TRIGGER "InventoryBalance_nonnegative_guard_update" BEFORE UPDATE ON "InventoryBalance" WHEN NEW.qtyOnHand<0 OR NEW.qtyAllocated<0 OR NEW.qtyAllocated>NEW.qtyOnHand BEGIN SELECT RAISE(ABORT, 'Invalid stock reference or quantity'); END;
 CREATE TRIGGER "SerialItem_layer_guard_insert" BEFORE INSERT ON "SerialItem" WHEN NEW.stockLayerId IS NOT NULL AND NOT EXISTS(SELECT 1 FROM StockLayer l WHERE l.id=NEW.stockLayerId AND l.workspaceId=NEW.workspaceId AND l.productId=NEW.productId) BEGIN SELECT RAISE(ABORT, 'Invalid stock reference or quantity'); END;
 CREATE TRIGGER "SerialItem_layer_guard_update" BEFORE UPDATE ON "SerialItem" WHEN NEW.stockLayerId IS NOT NULL AND NOT EXISTS(SELECT 1 FROM StockLayer l WHERE l.id=NEW.stockLayerId AND l.workspaceId=NEW.workspaceId AND l.productId=NEW.productId) BEGIN SELECT RAISE(ABORT, 'Invalid stock reference or quantity'); END;
+
+CREATE TABLE ProductUnit (
+ id TEXT NOT NULL PRIMARY KEY, workspaceId TEXT NOT NULL, productId TEXT NOT NULL, name TEXT NOT NULL, factor INTEGER NOT NULL CHECK(factor>0), active BOOLEAN NOT NULL DEFAULT true,
+ FOREIGN KEY(workspaceId) REFERENCES Workspace(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ FOREIGN KEY(productId) REFERENCES Product(id) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX ProductUnit_productId_name_key ON ProductUnit(productId,name);
+CREATE TRIGGER ProductUnit_guard_insert BEFORE INSERT ON ProductUnit WHEN NOT EXISTS(SELECT 1 FROM Product p WHERE p.id=NEW.productId AND p.workspaceId=NEW.workspaceId) BEGIN SELECT RAISE(ABORT,'Unit product workspace mismatch'); END;
+CREATE TRIGGER ProductUnit_guard_update BEFORE UPDATE ON ProductUnit WHEN NOT EXISTS(SELECT 1 FROM Product p WHERE p.id=NEW.productId AND p.workspaceId=NEW.workspaceId) BEGIN SELECT RAISE(ABORT,'Unit product workspace mismatch'); END;
+
 COMMIT;
 PRAGMA foreign_keys=ON;

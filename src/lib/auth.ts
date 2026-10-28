@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import type { Prisma, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import type { SessionProfile } from "@/lib/session-types";
+import { deletedWorkspaces } from "@/lib/workspace-state";
 
 const deriveKey = promisify(scrypt);
 export const SESSION_COOKIE = "stockspace_session";
@@ -68,12 +69,16 @@ export const readSession = cache(async () => {
   return session;
 });
 
-export function workspaceVisibility(user: {
+export async function workspaceVisibility(user: {
   id: string;
   role: UserRole;
-}): Prisma.WorkspaceWhereInput {
-  if (user.role === "ADMIN") return {};
+}): Promise<Prisma.WorkspaceWhereInput> {
+  const excluded = {
+    id: { notIn: (await deletedWorkspaces()).map((row) => row.workspaceId) },
+  };
+  if (user.role === "ADMIN") return excluded;
   return {
+    ...excluded,
     type: user.role === "STAFF" ? "BUSINESS" : "TRAINING",
     OR: [
       { members: { some: { userId: user.id } } },
@@ -101,8 +106,10 @@ export async function requireWorkspaceAccess() {
     throw new HttpError(409, "กรุณาเลือกพื้นที่ธุรกิจหรือรอบฝึกก่อนใช้งาน");
   const workspace = await prisma.workspace.findFirst({
     where: {
-      id: session.activeWorkspaceId,
-      ...workspaceVisibility(session.user),
+      AND: [
+        { id: session.activeWorkspaceId },
+        await workspaceVisibility(session.user),
+      ],
     },
   });
   if (!workspace)
@@ -110,7 +117,19 @@ export async function requireWorkspaceAccess() {
       403,
       "ไม่มีสิทธิ์เข้าถึงพื้นที่นี้ กรุณาเลือกพื้นที่ที่ได้รับมอบหมาย",
     );
-  return { user: session.user, workspace, sessionId: session.id };
+  const trainingRound =
+    session.user.role === "STUDENT"
+      ? await prisma.trainingRound.findUnique({
+          where: { workspaceId: workspace.id },
+          select: { id: true, status: true, configJson: true },
+        })
+      : null;
+  return {
+    user: session.user,
+    workspace,
+    sessionId: session.id,
+    trainingRound,
+  };
 }
 export type WorkspaceAccess = Awaited<
   ReturnType<typeof requireWorkspaceAccess>
@@ -126,6 +145,49 @@ export async function workspaceAccessForRequest(request: Request) {
       409,
       "พื้นที่ทำงานเปลี่ยนไปแล้ว กรุณารีเฟรชและตรวจพื้นที่ก่อนทำรายการ",
     );
+  if (access.user.role === "STUDENT") {
+    const path = new URL(request.url).pathname;
+    const operational = [
+      "/api/stock",
+      "/api/inventory",
+      "/api/serials",
+      "/api/abc",
+      "/api/activity",
+      "/api/orders",
+      "/api/maps",
+      "/api/labels",
+      "/api/counts",
+      "/api/receipts",
+      "/api/inbound",
+      "/api/outbound",
+      "/api/transfers",
+    ].some((p) => path === p || path.startsWith(p + "/"));
+    if (operational && access.trainingRound?.status !== "ACTIVE")
+      throw new HttpError(
+        403,
+        "ข้อมูลและงานคลังของผู้เรียนเปิดเฉพาะรอบฝึกที่เริ่มแล้ว ดูโจทย์หรือแบบวิจัยจากเมนูห้องเรียน",
+      );
+    const config = access.trainingRound
+      ? (JSON.parse(access.trainingRound.configJson) as { task: string })
+      : null;
+    if (
+      config?.task === "COUNT" &&
+      [
+        "/api/stock",
+        "/api/inventory",
+        "/api/serials",
+        "/api/abc",
+        "/api/activity",
+        "/api/orders",
+        "/api/maps",
+        "/api/labels",
+      ].some((p) => path === p || path.startsWith(p + "/"))
+    )
+      throw new HttpError(
+        403,
+        "รอบตรวจนับไม่เปิดยอดอ้างอิง ใช้ชั้นสินค้าจำลองและแบบบันทึกผลนับ",
+      );
+  }
   return access;
 }
 
@@ -151,8 +213,10 @@ export async function profileForSession(): Promise<SessionProfile> {
   const workspace = session.activeWorkspaceId
     ? await prisma.workspace.findFirst({
         where: {
-          id: session.activeWorkspaceId,
-          ...workspaceVisibility(session.user),
+          AND: [
+            { id: session.activeWorkspaceId },
+            await workspaceVisibility(session.user),
+          ],
         },
         select: { id: true, name: true, code: true, type: true },
       })
@@ -204,7 +268,8 @@ export async function openSession(
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: new URL(process.env.APP_ORIGIN || request.url).protocol === "https:",
+    secure:
+      new URL(process.env.APP_ORIGIN || request.url).protocol === "https:",
     path: "/",
     expires: expiresAt,
   });

@@ -28,6 +28,20 @@ export async function apiHandler(action: () => Promise<Response>) {
       typeof error === "object" &&
       error &&
       "code" in error &&
+      ["P2034", "P1008", "P2028"].includes(String(error.code))
+    )
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "มีรายการอื่นกำลังใช้งานข้อมูลนี้ กรุณาตรวจข้อมูลล่าสุดแล้วลองรายการเดิมอีกครั้ง",
+        },
+        { status: 409 },
+      );
+    if (
+      typeof error === "object" &&
+      error &&
+      "code" in error &&
       error.code === "P2002"
     )
       return NextResponse.json(

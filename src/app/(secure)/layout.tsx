@@ -7,5 +7,9 @@ export default async function SecureLayout({
   children: React.ReactNode;
 }) {
   const profile = await profileForSession();
-  return <AppShell profile={profile}>{children}</AppShell>;
+  return (
+    <AppShell key={profile.workspace?.id || "no-workspace"} profile={profile}>
+      {children}
+    </AppShell>
+  );
 }

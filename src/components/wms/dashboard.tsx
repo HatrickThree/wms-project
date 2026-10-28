@@ -15,6 +15,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { prisma } from "@/lib/db";
+import { businessToday } from "@/services/stock-operation";
 import type { WorkspaceAccess } from "@/lib/auth";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { movementLabels } from "@/lib/wms";
@@ -42,7 +43,10 @@ async function loadDashboard(workspaceId: string) {
   const [products, available, movements, locations] = await Promise.all([
     prisma.product.findMany({
       where: { workspaceId },
-      include: { inventories: { include: { location: true } } },
+      include: {
+        inventories: { include: { location: true } },
+        layers: { include: { location: true, lot: true } },
+      },
       orderBy: { sku: "asc" },
     }),
     prisma.serialItem.groupBy({
@@ -50,6 +54,23 @@ async function loadDashboard(workspaceId: string) {
       where: {
         workspaceId,
         status: "IN_STOCK",
+        AND: [
+          {
+            stockLayer: {
+              OR: [
+                { lotId: null },
+                { lot: { expiresOn: null } },
+                { lot: { expiresOn: { gte: businessToday() } } },
+              ],
+            },
+          },
+          {
+            OR: [
+              { product: { issuePolicy: "FIFO" } },
+              { stockLayer: { lot: { expiresOn: { gte: businessToday() } } } },
+            ],
+          },
+        ],
         location: { type: { in: ["STORAGE", "PICKING"] } },
       },
       _count: { _all: true },
@@ -74,9 +95,13 @@ async function loadDashboard(workspaceId: string) {
     units.set(product.baseUom, (units.get(product.baseUom) || 0) + onHand);
     const ready = product.trackSerial
       ? readyMap.get(product.id) || 0
-      : product.inventories
-          .filter((balance) =>
-            ["STORAGE", "PICKING"].includes(balance.location.type),
+      : product.layers
+          .filter(
+            (balance) =>
+              ["STORAGE", "PICKING"].includes(balance.location.type) &&
+              (!balance.lot?.expiresOn ||
+                balance.lot.expiresOn >= businessToday()) &&
+              (product.issuePolicy !== "FEFO" || !!balance.lot?.expiresOn),
           )
           .reduce(
             (sum, balance) =>
@@ -328,7 +353,7 @@ export async function Dashboard({ access }: { access: WorkspaceAccess }) {
                 {
                   href: "/inbound",
                   label: "รับสินค้าเข้า",
-                  hint: "สแกนสะสม Serial และบันทึก",
+                  hint: "จำนวน / Serial / Lot และหน่วยบรรจุ",
                   icon: ArrowDownToLine,
                   color: "bg-blue-50 text-blue-700",
                 },
@@ -376,7 +401,7 @@ export async function Dashboard({ access }: { access: WorkspaceAccess }) {
               เพื่อค้นหาตำแหน่งและหมายเลขเครื่อง
             </p>
             <Button asChild variant="link" className="mt-2 h-auto p-0 text-xs">
-              <Link href="/inventory">
+              <Link href="/stock">
                 ไปที่สินค้าคงคลัง
                 <ArrowRight />
               </Link>

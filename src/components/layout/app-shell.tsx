@@ -4,6 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowDownToLine,
+  ArrowLeftRight,
+  BarChart3,
+  ClipboardCheck,
   ArrowUpFromLine,
   Boxes,
   ChevronRight,
@@ -22,6 +25,7 @@ import {
   ScanLine,
   Search,
   Warehouse,
+  GraduationCap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,10 +46,15 @@ import { Toaster } from "sonner";
 import { toast } from "sonner";
 import { request } from "@/lib/wms";
 import { roleLabels, type SessionProfile } from "@/lib/session-types";
+import {
+  SpeechProvider,
+  SpeechSettingsControl,
+} from "@/components/wms/speech-guidance";
 
 const navigation = [
   { href: "/", label: "ภาพรวมคลัง", icon: LayoutDashboard },
   { href: "/inventory", label: "สินค้าคงคลัง", icon: Boxes },
+  { href: "/stock", label: "ยอดสต็อกและ Lot", icon: Package },
   { href: "/inbound", label: "รับสินค้าเข้า", icon: ArrowDownToLine },
   { href: "/outbound", label: "จ่ายสินค้าออก", icon: ArrowUpFromLine },
   { href: "/serials", label: "ประวัติ Serial", icon: History },
@@ -66,8 +75,42 @@ function Shell({
   const guardedAction = useGuardedAction();
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
-  const menuItems = [
-    ...navigation,
+  const allMenuItems = [
+    ...navigation.filter(
+      (item) =>
+        profile.user.role !== "STUDENT" ||
+        !["/inbound", "/outbound"].includes(item.href),
+    ),
+    ...(profile.user.role !== "STUDENT"
+      ? [
+          {
+            href: "/transfers",
+            label: "จัดเก็บ / ย้ายตำแหน่ง",
+            icon: ArrowLeftRight,
+          },
+          { href: "/counts", label: "ตรวจนับสินค้า", icon: ClipboardCheck },
+        ]
+      : []),
+    { href: "/abc", label: "ABC / รอบตรวจนับ", icon: BarChart3 },
+    { href: "/maps", label: "ผังคลัง / เส้นทางหยิบ", icon: MapPin },
+    { href: "/activity", label: "บันทึกการทำงาน", icon: History },
+    ...(profile.workspace?.type === "TRAINING"
+      ? [
+          {
+            href: "/training",
+            label: "ห้องเรียน / รอบฝึก",
+            icon: GraduationCap,
+          },
+          {
+            href: "/research",
+            label: "แบบทดสอบ / แบบวิจัย",
+            icon: ClipboardCheck,
+          },
+        ]
+      : []),
+    ...(profile.user.role !== "STUDENT"
+      ? [{ href: "/catalog", label: "สินค้า คลัง และตำแหน่ง", icon: Warehouse }]
+      : []),
     {
       href: "/workspaces",
       label: "พื้นที่ธุรกิจ / การฝึก",
@@ -77,14 +120,27 @@ function Shell({
       ? [{ href: "/admin/users", label: "บัญชีผู้ใช้", icon: UsersRound }]
       : []),
   ];
+  const menuItems =
+    profile.user.role === "STUDENT"
+      ? allMenuItems.filter((item) =>
+          ["/training", "/research", "/workspaces"].includes(item.href),
+        )
+      : allMenuItems;
   const active = menuItems.find((item) => item.href === pathname);
-  const signOut = () => guardedAction(() => {
-    setMobileOpen(false);
-    setSigningOut(true);
-    request("/api/auth/logout", { method: "POST" })
-      .then(() => { router.replace("/login"); router.refresh(); })
-      .catch(() => { toast.error("ยังออกจากระบบไม่ได้ กรุณาลองใหม่"); setSigningOut(false); });
-  });
+  const signOut = () =>
+    guardedAction(() => {
+      setMobileOpen(false);
+      setSigningOut(true);
+      request("/api/auth/logout", { method: "POST" })
+        .then(() => {
+          router.replace("/login");
+          router.refresh();
+        })
+        .catch(() => {
+          toast.error("ยังออกจากระบบไม่ได้ กรุณาลองใหม่");
+          setSigningOut(false);
+        });
+    });
   const links = (compact = false) => (
     <nav aria-label="เมนูหลัก" className="space-y-1.5">
       {menuItems.map(({ href, label, icon: Icon }) => (
@@ -297,12 +353,17 @@ function Shell({
             </Link>
           </Button>
           <div className="hidden h-7 w-px bg-border sm:block" />
-          <span
-            title="พื้นที่จัดการคลังสินค้า"
+          <div className="hidden sm:block">
+            <SpeechSettingsControl />
+          </div>
+          <Link
+            href="/account"
+            aria-label="บัญชีผู้ใช้ของฉัน"
+            title={profile.user.displayName}
             className="flex size-9 shrink-0 items-center justify-center rounded-full border bg-blue-50 text-primary"
           >
             <Warehouse className="size-4" />
-          </span>
+          </Link>
         </header>
         <main
           id="main-content"
@@ -333,12 +394,23 @@ function Shell({
             </SheetDescription>
           </SheetHeader>
           {links()}
+          <SpeechSettingsControl fullWidth />
           <div className="space-y-3 border-t border-slate-700 pt-4">
-            <Link href="/account" onClick={() => setMobileOpen(false)} className="block text-sm underline-offset-4 hover:underline">
+            <Link
+              href="/account"
+              onClick={() => setMobileOpen(false)}
+              className="block text-sm underline-offset-4 hover:underline"
+            >
               {profile.user.displayName} · {roleLabels[profile.user.role]}
             </Link>
-            <Button variant="ghost" className="w-full justify-start text-slate-300 hover:bg-slate-800 hover:text-white" disabled={signingOut} onClick={signOut}>
-              <LogOut />{signingOut ? "กำลังออก…" : "ออกจากระบบ"}
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-slate-300 hover:bg-slate-800 hover:text-white"
+              disabled={signingOut}
+              onClick={signOut}
+            >
+              <LogOut />
+              {signingOut ? "กำลังออก…" : "ออกจากระบบ"}
             </Button>
           </div>
           <p className="mt-auto flex items-center gap-2 text-xs text-slate-400">
@@ -359,8 +431,10 @@ export function AppShell({
   profile: SessionProfile;
 }) {
   return (
-    <NavigationGuard>
-      <Shell profile={profile}>{children}</Shell>
-    </NavigationGuard>
+    <SpeechProvider>
+      <NavigationGuard>
+        <Shell profile={profile}>{children}</Shell>
+      </NavigationGuard>
+    </SpeechProvider>
   );
 }

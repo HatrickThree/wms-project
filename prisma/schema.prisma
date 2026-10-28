@@ -19,6 +19,7 @@ enum SerialStatus {
   IN_STOCK    // อยู่ในคลังสินค้า (พร้อมใช้งาน/พร้อมขาย)
   ALLOCATED   // ถูกจองไว้สำหรับใบสั่งขาย/ใบเบิกแล้ว
   PICKED      // หยิบแล้ว รอยืนยันจ่าย
+  MISSING     // ไม่พบจากการตรวจนับที่อนุมัติแล้ว
   SHIPPED     // จ่ายออกจากคลัง/ส่งมอบให้ลูกค้าแล้ว
   RETURNED    // รับคืนจากลูกค้า (อยู่ระหว่างตรวจสอบ)
   DEFECTIVE   // ชำรุด/เสีย (ห้ามหยิบขาย)
@@ -43,6 +44,8 @@ model Warehouse {
   name      String
   locations Location[]
   createdAt DateTime   @default(now())
+  map WarehouseMap?
+  pickingPlans PickingPlan[]
   @@unique([workspaceId, code])
 }
 
@@ -80,6 +83,10 @@ model Product {
   lots StockLot[]
   layers StockLayer[]
   orderLines OrderLine[]
+  units ProductUnit[]
+  abcProfile ABCProfile?
+  abcHistory ABCAssignment[]
+  counts CountRun[]
   inventories InventoryBalance[]
   serialItems SerialItem[]
   movements   StockLedger[]
@@ -98,6 +105,7 @@ model InventoryBalance {
   location     Location @relation(fields: [locationId], references: [id])
   qtyOnHand    Int      @default(0)
   qtyAllocated Int      @default(0)
+  version Int @default(0)
   updatedAt    DateTime @updatedAt
 
   @@unique([productId, locationId])
@@ -196,8 +204,14 @@ model Workspace {
   name String
   type WorkspaceType
   ownerId String?
+  deletion WorkspaceDeletion?
   owner User? @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
+  maps WarehouseMap[]
+  pickingPlans PickingPlan[]
+  lessons TrainingLesson[]
+  trainingRound TrainingRound?
+  researchForms ResearchForm[]
   members WorkspaceMember[]
   sessions UserSession[]
   warehouses Warehouse[]
@@ -210,6 +224,20 @@ model Workspace {
   layers StockLayer[]
   orders StockOrder[]
   operations StockOperation[]
+  units ProductUnit[]
+  abcSettings ABCSettings?
+  abcProfiles ABCProfile[]
+  abcRuns ABCRun[]
+  abcAssignments ABCAssignment[]
+  countRuns CountRun[]
+  operationalEvents OperationalEvent[]
+}
+
+model WorkspaceDeletion {
+ workspaceId String @id
+ workspace Workspace @relation(fields:[workspaceId],references:[id])
+ deletedAt DateTime @default(now())
+ deletedBy String
 }
 
 model WorkspaceMember {
@@ -293,6 +321,7 @@ model StockOrder {
   reservedAt DateTime?
   shippedAt DateTime?
   lines OrderLine[]
+  pickingPlans PickingPlan[]
   @@unique([workspaceId, number])
   @@index([workspaceId, createdAt])
 }
@@ -303,8 +332,23 @@ model OrderLine {
   productId String
   product Product @relation(fields: [productId], references: [id])
   quantity Int
+  requestedQuantity Int @default(1)
+  requestedUom String @default("PCS")
+  conversionFactor Int @default(1)
   allocations StockAllocation[]
   @@unique([orderId, productId])
+}
+
+model ProductUnit {
+  id String @id @default(cuid())
+  workspaceId String
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  productId String
+  product Product @relation(fields: [productId], references: [id])
+  name String
+  factor Int
+  active Boolean @default(true)
+  @@unique([productId, name])
 }
 model StockAllocation {
   id String @id @default(cuid())
@@ -321,4 +365,209 @@ model StockAllocation {
   overrideBy String?
   @@index([orderLineId])
   @@index([stockLayerId])
+}
+
+
+model ABCSettings {
+ workspaceId String @id
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ windowDays Int @default(90)
+ thresholdA Int @default(80)
+ thresholdB Int @default(95)
+ tieRule String?
+ daysA Int?
+ daysB Int?
+ daysC Int?
+ updatedAt DateTime @updatedAt
+ updatedBy String
+}
+model ABCProfile {
+ productId String @id
+ product Product @relation(fields:[productId], references:[id])
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ class String?
+ confirmedAt DateTime?
+ confirmedBy String?
+ lastCountedAt DateTime?
+}
+model ABCRun {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ fromDate String
+ toDate String
+ thresholdA Int
+ thresholdB Int
+ tieRule String
+ resultsJson String
+ createdAt DateTime @default(now())
+ createdBy String
+ assignments ABCAssignment[]
+ @@index([workspaceId,createdAt])
+}
+model ABCAssignment {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ productId String
+ product Product @relation(fields:[productId],references:[id])
+ runId String
+ run ABCRun @relation(fields:[runId],references:[id])
+ oldClass String?
+ newClass String
+ reason String?
+ confirmedAt DateTime @default(now())
+ confirmedBy String
+ @@index([workspaceId,productId,confirmedAt])
+}
+model OperationalEvent {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ operationKey String
+ type String
+ actor String
+ detailsJson String
+ createdAt DateTime @default(now())
+ @@index([workspaceId,createdAt])
+ @@unique([workspaceId,operationKey])
+}
+model CountRun {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ productId String
+ product Product @relation(fields:[productId],references:[id])
+ number String
+ status String @default("OPEN")
+ mode String
+ snapshotJson String
+ startedAt DateTime @default(now())
+ startedBy String
+ submittedAt DateTime?
+ approvedAt DateTime?
+ approvedBy String?
+ reason String?
+ entries CountEntry[]
+ @@unique([workspaceId,number])
+ @@index([workspaceId,productId,status])
+}
+model CountEntry {
+ id String @id @default(cuid())
+ runId String
+ run CountRun @relation(fields:[runId],references:[id])
+ locationId String
+ lotNumber String @default("")
+ expiresOn String?
+ actualQuantity Int?
+ enteredQuantity Int?
+ enteredUom String?
+ conversionFactor Int?
+ serialsJson String @default("[]")
+ countedBy String?
+ countedAt DateTime?
+ @@unique([runId,locationId,lotNumber])
+}
+
+model WarehouseMap {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ warehouseId String @unique
+ warehouse Warehouse @relation(fields:[warehouseId], references:[id])
+ version Int @default(1)
+ graphJson String
+ updatedAt DateTime @updatedAt
+ updatedBy String
+}
+model PickingPlan {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ orderId String
+ order StockOrder @relation(fields:[orderId],references:[id])
+ warehouseId String
+ warehouse Warehouse @relation(fields:[warehouseId],references:[id])
+ mapVersion Int
+ snapshotJson String
+ resultJson String
+ createdAt DateTime @default(now())
+ createdBy String
+ @@index([workspaceId, orderId, createdAt])
+}
+
+model TrainingLesson {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId],references:[id])
+ title String
+ status String @default("DRAFT")
+ configJson String
+ approvedBy String?
+ approvedAt DateTime?
+ createdBy String
+ createdAt DateTime @default(now())
+ rounds TrainingRound[]
+ @@index([workspaceId,createdAt])
+}
+model TrainingRound {
+ id String @id @default(cuid())
+ lessonId String
+ lesson TrainingLesson @relation(fields:[lessonId],references:[id])
+ workspaceId String @unique
+ workspace Workspace @relation(fields:[workspaceId],references:[id])
+ name String
+ status String @default("READY")
+ seed String
+ fixtureHash String
+ configJson String
+ truthJson String
+ assessmentJson String?
+ startedAt DateTime?
+ submittedAt DateTime?
+ reviewedAt DateTime?
+ reviewedBy String?
+ createdAt DateTime @default(now())
+ events TrainingEvent[]
+ @@index([lessonId])
+}
+model TrainingEvent {
+ id String @id @default(cuid())
+ roundId String
+ round TrainingRound @relation(fields:[roundId],references:[id])
+ operationKey String
+ actor String
+ actorRole String
+ type String
+ success Boolean
+ detailsJson String
+ createdAt DateTime @default(now())
+ @@unique([roundId,operationKey])
+ @@index([roundId,createdAt])
+}
+model ResearchForm {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId],references:[id])
+ title String
+ kind String
+ status String @default("DRAFT")
+ configJson String
+ approvedAt DateTime?
+ approvedBy String?
+ createdBy String
+ createdAt DateTime @default(now())
+ responses ResearchResponse[]
+ @@index([workspaceId,createdAt])
+}
+model ResearchResponse {
+ id String @id @default(cuid())
+ formId String
+ form ResearchForm @relation(fields:[formId],references:[id])
+ userId String
+ respondentCode String
+ answersJson String
+ submittedAt DateTime @default(now())
+ @@unique([formId,userId])
 }

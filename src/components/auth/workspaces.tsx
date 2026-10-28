@@ -10,6 +10,8 @@ import {
   Plus,
   UsersRound,
   X,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +47,15 @@ import {
 } from "@/components/wms/common";
 import { request } from "@/lib/wms";
 import { roleLabels, type AppRole } from "@/lib/session-types";
+import { ApiError } from "@/lib/wms";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useUnsavedChanges } from "@/components/layout/navigation-guard";
+import { toast } from "sonner";
 
 interface WorkspaceItem {
   id: string;
@@ -52,6 +63,7 @@ interface WorkspaceItem {
   name: string;
   type: "BUSINESS" | "TRAINING";
   ownerId: string | null;
+  deletion: { deletedAt: string; deletedBy: string } | null;
   _count: { products: number; members: number };
 }
 interface Member {
@@ -86,12 +98,74 @@ export function WorkspacesScreen({ role }: { role: AppRole }) {
   const [memberError, setMemberError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState("");
   const [memberRefresh, setMemberRefresh] = useState(0);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [target, setTarget] = useState<WorkspaceItem | null>(null);
+  const [confirmation, setConfirmation] = useState("");
+  const [password, setPassword] = useState("");
+  const [operationId, setOperationId] = useState("");
+  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
+  const [uncertain, setUncertain] = useState(false);
+  useUnsavedChanges(!!target && (!!confirmation || !!password || uncertain));
+  const closeLifecycle = () => {
+    setTarget(null);
+    setPassword("");
+    setConfirmation("");
+    setLifecycleError(null);
+    setUncertain(false);
+    setOperationId("");
+  };
+  const openLifecycle = (workspace: WorkspaceItem) => {
+    setTarget(workspace);
+    setPassword("");
+    setConfirmation("");
+    setLifecycleError(null);
+    setUncertain(false);
+    setOperationId(crypto.randomUUID());
+  };
+  const lifecycleAction = async () => {
+    if (!target || busy) return;
+    setBusy(true);
+    setLifecycleError(null);
+    try {
+      const result = await request<{ message: string }>(
+        `/api/workspaces/${target.id}`,
+        {
+          method: target.deletion ? "POST" : "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            operationId,
+            confirmName: confirmation,
+            ...(target.deletion
+              ? { deletedAt: target.deletion.deletedAt }
+              : { password }),
+          }),
+        },
+      );
+      toast.success(result.message);
+      closeLifecycle();
+      setRefresh((n) => n + 1);
+      router.refresh();
+    } catch (e) {
+      const unknown = !(e instanceof ApiError) || (e.status || 500) >= 500;
+      setUncertain(unknown);
+      setLifecycleError(
+        unknown
+          ? "ยังยืนยันผลไม่ได้ กดตรวจผลรายการเดิมก่อนปิดหน้าต่าง ระบบจะไม่ทำรายการซ้ำ"
+          : e.message,
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
   const canCreate = role === "ADMIN" || role === "INSTRUCTOR";
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    request<WorkspaceResult>("/api/workspaces", { signal: controller.signal })
+    request<WorkspaceResult>(
+      `/api/workspaces${showDeleted ? "?deleted=1" : ""}`,
+      { signal: controller.signal },
+    )
       .then((result) => {
         if (!controller.signal.aborted) setData(result);
       })
@@ -105,7 +179,7 @@ export function WorkspacesScreen({ role }: { role: AppRole }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [refresh]);
+  }, [refresh, showDeleted]);
   useEffect(() => {
     if (!managed) return;
     const controller = new AbortController();
@@ -158,6 +232,17 @@ export function WorkspacesScreen({ role }: { role: AppRole }) {
         description="เลือกพื้นที่ก่อนทำงาน ข้อมูลสินค้าและประวัติแยกจากกัน ผู้เรียนเข้าถึงได้เฉพาะพื้นที่ฝึกที่ได้รับมอบหมาย"
       />
       {error && <Feedback value={{ kind: "error", text: error }} />}
+      {role === "ADMIN" && (
+        <label className="flex min-h-12 items-center gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={showDeleted}
+            disabled={busy || !!target}
+            onChange={(e) => setShowDeleted(e.target.checked)}
+          />
+          แสดงพื้นที่ที่ลบออกจากการใช้งาน (กู้คืนได้)
+        </label>
+      )}
       {canCreate && (
         <Card>
           <CardHeader>
@@ -274,6 +359,15 @@ export function WorkspacesScreen({ role }: { role: AppRole }) {
                   {workspace._count.products} SKU · {workspace._count.members}{" "}
                   สมาชิก
                 </p>
+                {workspace.deletion && (
+                  <p className="text-sm text-destructive">
+                    ลบโดย {workspace.deletion.deletedBy} ·{" "}
+                    {new Date(workspace.deletion.deletedAt).toLocaleString(
+                      "th-TH",
+                      { timeZone: "Asia/Bangkok" },
+                    )}
+                  </p>
+                )}
                 {workspace.id === data.activeWorkspaceId && (
                   <p className="flex items-center gap-2 text-xs font-medium text-emerald-800">
                     <CheckCircle2 className="size-4" />
@@ -281,42 +375,56 @@ export function WorkspacesScreen({ role }: { role: AppRole }) {
                   </p>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    disabled={busy}
-                    onClick={async () => {
-                      setBusy(true);
-                      setError(null);
-                      try {
-                        await request("/api/workspaces/switch", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ workspaceId: workspace.id }),
-                        });
-                        router.push("/");
-                        router.refresh();
-                      } catch (failure) {
-                        setError(
-                          failure instanceof Error
-                            ? failure.message
-                            : "เปลี่ยนพื้นที่ไม่ได้",
-                        );
-                        setBusy(false);
-                      }
-                    }}
-                  >
-                    เปิดพื้นที่
-                    <ArrowRight />
-                  </Button>
-                  {(role === "ADMIN" ||
-                    (role === "INSTRUCTOR" &&
-                      workspace.ownerId === data.userId)) && (
+                  {!workspace.deletion && (
                     <Button
-                      variant="outline"
                       disabled={busy}
-                      onClick={() => setManaged(workspace)}
+                      onClick={async () => {
+                        setBusy(true);
+                        setError(null);
+                        try {
+                          await request("/api/workspaces/switch", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ workspaceId: workspace.id }),
+                          });
+                          router.push("/");
+                          router.refresh();
+                        } catch (failure) {
+                          setError(
+                            failure instanceof Error
+                              ? failure.message
+                              : "เปลี่ยนพื้นที่ไม่ได้",
+                          );
+                          setBusy(false);
+                        }
+                      }}
                     >
-                      <UsersRound />
-                      สมาชิก
+                      เปิดพื้นที่
+                      <ArrowRight />
+                    </Button>
+                  )}
+                  {!workspace.deletion &&
+                    (role === "ADMIN" ||
+                      (role === "INSTRUCTOR" &&
+                        workspace.ownerId === data.userId)) && (
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => setManaged(workspace)}
+                      >
+                        <UsersRound />
+                        สมาชิก
+                      </Button>
+                    )}
+                  {role === "ADMIN" && (
+                    <Button
+                      variant={workspace.deletion ? "outline" : "destructive"}
+                      disabled={busy}
+                      aria-label={`${workspace.deletion ? "กู้คืน" : "ลบพื้นที่"} ${workspace.name}`}
+                      onClick={() => openLifecycle(workspace)}
+                    >
+                      {workspace.deletion ? <RotateCcw /> : <Trash2 />}
+                      {workspace.deletion ? "กู้คืนพื้นที่" : "ลบพื้นที่"}
                     </Button>
                   )}
                 </div>
@@ -327,7 +435,11 @@ export function WorkspacesScreen({ role }: { role: AppRole }) {
       ) : (
         <Card>
           <EmptyState
-            title="ยังไม่มีพื้นที่ที่เข้าถึงได้"
+            title={
+              showDeleted
+                ? "ไม่มีพื้นที่ที่ลบไว้"
+                : "ยังไม่มีพื้นที่ที่เข้าถึงได้"
+            }
             description={
               canCreate
                 ? "สร้างพื้นที่ใหม่ หรือให้ผู้ดูแลกำหนดพื้นที่ให้ก่อนเริ่มงาน"
@@ -336,6 +448,99 @@ export function WorkspacesScreen({ role }: { role: AppRole }) {
           />
         </Card>
       )}
+      <Dialog
+        open={!!target}
+        onOpenChange={(open) => {
+          if (!open && !busy && !uncertain) closeLifecycle();
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>
+            {target?.deletion
+              ? "กู้คืนพื้นที่"
+              : "ยืนยันลบพื้นที่ออกจากการใช้งาน"}
+          </DialogTitle>
+          <DialogDescription>
+            {target?.deletion
+              ? "ข้อมูลและสมาชิกเดิมจะกลับมาใช้งานได้ โดยต้องเลือกพื้นที่อีกครั้งหลังการกู้คืน"
+              : "พื้นที่นี้จะหายจากรายการและไม่สามารถเข้าทำงานได้ รวมถึงแท็บที่เปิดค้างอยู่ ข้อมูลสินค้า ประวัติ และผลฝึกยังอยู่เพื่อให้ผู้ดูแลกู้คืนได้ ไม่ลบคลังรอบฝึกที่สร้างแยกไว้"}
+          </DialogDescription>
+          <p className="break-words font-medium">{target?.name}</p>
+          {lifecycleError && (
+            <Feedback
+              value={{
+                kind: uncertain ? "uncertain" : "error",
+                text: lifecycleError,
+              }}
+            />
+          )}
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (
+                confirmation === target?.name &&
+                (target.deletion || password)
+              )
+                void lifecycleAction();
+            }}
+          >
+            <div className="field-group">
+              <Label htmlFor="workspace-confirm-name">
+                พิมพ์ชื่อพื้นที่ให้ตรงเพื่อยืนยัน
+              </Label>
+              <Input
+                id="workspace-confirm-name"
+                autoComplete="off"
+                value={confirmation}
+                onChange={(e) => setConfirmation(e.target.value)}
+                disabled={busy || uncertain}
+                required
+                maxLength={100}
+              />
+            </div>
+            {!target?.deletion && (
+              <div className="field-group">
+                <Label htmlFor="workspace-confirm-password">
+                  รหัสผ่านบัญชีผู้ดูแลของคุณ
+                </Label>
+                <Input
+                  id="workspace-confirm-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={busy || uncertain}
+                  required
+                  maxLength={200}
+                />
+                <p className="text-xs text-muted-foreground">
+                  ตรวจรหัสผ่านอีกครั้งก่อนลบ ไม่บันทึกรหัสผ่านลงประวัติ
+                </p>
+              </div>
+            )}
+            <Button
+              className="w-full"
+              variant={target?.deletion ? "default" : "destructive"}
+              disabled={
+                busy ||
+                confirmation !== target?.name ||
+                (!target?.deletion && !password)
+              }
+            >
+              {busy ? (
+                <BusyLabel>กำลังตรวจและบันทึก…</BusyLabel>
+              ) : uncertain ? (
+                "ตรวจผลรายการเดิม"
+              ) : target?.deletion ? (
+                "ยืนยันกู้คืนพื้นที่"
+              ) : (
+                "ยืนยันรหัสผ่านและลบพื้นที่"
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
       <Sheet
         open={!!managed}
         onOpenChange={(open) => {

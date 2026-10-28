@@ -21,6 +21,8 @@ export const InventorySearchSchema = z
         "ALL",
         "IN_STOCK",
         "ALLOCATED",
+        "PICKED",
+        "MISSING",
         "SHIPPED",
         "RETURNED",
         "DEFECTIVE",
