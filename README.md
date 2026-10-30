@@ -76,3 +76,6 @@ Migration เพิ่มพื้นที่ธุรกิจหลักแ�
 คู่มือหน้าจอและการรับงาน: [WMS-LOCAL-ACCEPTANCE.md](docs/WMS-LOCAL-ACCEPTANCE.md) ผู้ใช้ยืนยันให้ทดสอบในเครื่องก่อน ยังไม่เผยแพร่ภายนอกหรือเปลี่ยนฐานข้อมูลสำหรับใช้งานหลายคน
 
 การทดสอบ workflow ใหม่เรียงบนฐาน QA ใหม่ที่ migrate แล้ว: `stock-workflow.mjs` → `counts-abc-transfers.mjs` → `warehouse-map-api.mjs` → `training-research.mjs` ส่วน `workspace-auth.mjs` ใช้ฐาน QA แยกที่ยังไม่มีบัญชีและมีข้อมูลคลังสาธิตจาก seed เท่านั้น การทดสอบกฎล้วน: `abc.mjs`, `warehouse-map.mjs`, `training-rules.mjs`
+
+
+การลบพื้นที่ธุรกิจ/การฝึก: เฉพาะผู้ดูแลระบบ ต้องยืนยันชื่อพื้นที่และรหัสผ่านปัจจุบัน เป็นการนำออกจากการใช้งานโดยเก็บข้อมูลไว้ และกู้คืนได้จากตัวกรองพื้นที่ที่ลบในหน้า `/workspaces` ดูขั้นตอนตรวจรับใน `docs/WMS-LOCAL-ACCEPTANCE.md`
