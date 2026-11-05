@@ -1,28 +1,17 @@
-# wms-project-test (In-House WMS with Serial Number Tracking — SQLite Edition)
+# stockspace WMS — Supabase / PostgreSQL
 
-ระบบบริหารจัดการคลังสินค้าภายในองค์กร (In-House Warehouse Management System) พัฒนาด้วย **Next.js (App Router) + TypeScript + Prisma ORM + SQLite + Tailwind CSS** รองรับการควบคุมหมายเลขเครื่องรายชิ้น (**Serial Number Tracking**) โดยไม่ต้องติดตั้ง Docker หรือตั้งค่า Database Server แยกต่างหาก
+ระบบบริหารคลังและการฝึกปฏิบัติ ใช้ Next.js App Router, TypeScript, Prisma 6, PostgreSQL บน Supabase และ shadcn/ui
 
-## การเริ่มต้นใช้งาน
+## เริ่มต้นใช้งาน
 
-1. ติดตั้งด้วย `npm install` และคัดลอก `.env.example` เป็น `.env` เฉพาะเมื่อยังไม่มีไฟล์ตั้งค่าเดิม
-2. ฐานข้อมูลใหม่: ใช้ `npx prisma migrate deploy` เพื่อสร้างโครงสร้าง แล้วเปิด `npm run dev`
-3. เปิด `http://127.0.0.1:3000` และสร้างบัญชีผู้ดูแลคนแรกในหน้า `/setup` ด้วยชื่อและรหัสผ่านของคุณเอง ไม่มีบัญชีเริ่มต้นร่วมกัน
-4. ผู้ดูแลสร้างบัญชีเจ้าหน้าที่ ผู้สอน และผู้เรียนในเมนูบัญชีผู้ใช้ แล้วกำหนดสมาชิกแต่ละพื้นที่ในเมนูพื้นที่ธุรกิจ / การฝึก
+1. สร้าง Supabase Project แล้วใส่ `DATABASE_URL` (Transaction pooler) และ `DIRECT_URL` (Session pooler/Direct) ใน `.env` โดยดูแม่แบบ `.env.example`
+2. ใช้ Node.js 24 และรัน `npm ci` จากนั้น `npm run db:deploy` เพื่อติดตั้งโครงสร้างในฐานข้อมูลใหม่
+3. รัน `npm run dev` และเปิด `http://127.0.0.1:3000` สร้างผู้ดูแลใน `/setup` เฉพาะกรณีเริ่มฐานข้อมูลใหม่ที่ไม่ย้ายบัญชีเดิม
+4. หากย้ายข้อมูล SQLite เดิม ให้ทำตาม [คู่มือ Supabase และ Vercel](docs/SUPABASE-DEPLOYMENT.md) ก่อนเปิดใช้งาน ไม่ใช้ seed/reset ทับข้อมูลจริง
 
-ตั้ง `APP_ORIGIN` ให้ตรงกับ URL ที่ใช้เปิดเว็บ เช่น `http://127.0.0.1:3000` ทุกหน้าควรใช้ URL นี้สม่ำเสมอ เมื่อเผยแพร่ต้องตั้งเป็น URL HTTPS จริง
+ไม่ต้องตั้ง `APP_ORIGIN` และไม่มีการตรวจปฏิเสธ Origin แล้ว ระบบยังตรวจบัญชี บทบาท และพื้นที่ที่เลือกตามเดิม
 
-### ย้ายฐานข้อมูลเดิมที่ยังไม่มี migration history
-
-หยุดเว็บและสำรอง SQLite ด้วย backup API ก่อนเสมอ ห้ามใช้ reset หรือ seed ทับข้อมูลทำงาน ตรวจว่าสคีมาเดิมตรงกับ migration `202610270000_legacy` แล้วใช้:
-
-```bash
-npx prisma migrate resolve --applied 202610270000_legacy
-npx prisma migrate deploy
-```
-
-Migration เพิ่มพื้นที่ธุรกิจหลักและย้ายระเบียนเดิมเข้าไป โดยรักษา ID จำนวน และประวัติ ไม่สร้างผู้ใช้ให้เอง ฐานข้อมูลที่มี migration history อยู่แล้วใช้เพียง `prisma migrate deploy`
-
-`npm run db:seed` และ `npm run db:setup` เป็นข้อมูลสาธิตสำหรับฐานข้อมูลใหม่หรือฐานข้อมูลทิ้งได้เท่านั้น ไม่ใช้กับข้อมูลธุรกิจ
+รายละเอียดค่าการเชื่อมต่อ การย้ายข้อมูลเดิม การทดสอบ และขั้นตอน Vercel อยู่ใน [คู่มือติดตั้ง](docs/SUPABASE-DEPLOYMENT.md)
 
 ## หน้าจอ WMS
 
@@ -47,7 +36,7 @@ Migration เพิ่มพื้นที่ธุรกิจหลักแ�
 - กล้องเริ่มเมื่อผู้ใช้กดเปิดเท่านั้น อ่านจากภาพได้ด้วย การอ่านรหัสช่วยกรอกช่อง ไม่บันทึกรับ/จ่ายอัตโนมัติ กล้องมือถือผ่านเครือข่ายต้องใช้ HTTPS
 - เปลี่ยนรหัสผ่านหรือระงับบัญชีจะเพิกถอน session ที่มีอยู่ อายุ session สูงสุด 12 ชั่วโมง
 
-ตรวจเวอร์ชันเว็บด้วย `npm run check` ซึ่งสร้างผลลัพธ์ใน `.next-check` แยกจากเว็บพัฒนา ชุดทดสอบ `tests/workspace-auth.mjs` ใช้เฉพาะสำเนาฐานข้อมูลที่มี migration แล้วและยังไม่มีบัญชี ตั้ง `ALLOW_DISPOSABLE_DATABASE=1`, `DATABASE_URL` เป็นไฟล์ลงท้าย test/qa...db และ `TEST_BASE_URL` ให้ตรงเซิร์ฟเวอร์ทดสอบ ห้ามใช้ฐานข้อมูลทำงาน
+ตรวจเวอร์ชันเว็บด้วย `npm run check` ซึ่งสร้างผลลัพธ์ใน `.next-check` แยกจากเว็บพัฒนา ชุดทดสอบใช้ PostgreSQL ทิ้งได้บนเครื่องเท่านั้น โดยมี `ALLOW_DISPOSABLE_DATABASE=1` และชื่อฐานข้อมูลมีคำ test/qa ตามข้อกำหนดในคู่มือติดตั้ง
 
 ติดตามส่วนที่ยังไม่ครบใน [ข้อกำหนด Concept Paper](docs/CONCEPT-PAPER-REQUIREMENTS.md)
 

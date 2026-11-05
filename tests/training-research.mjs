@@ -1,11 +1,8 @@
+import { requireDisposableDatabase, assertForeignKeysValid } from "./disposable-database.mjs";
 import assert from "node:assert/strict";
 import { randomUUID, randomBytes, scryptSync } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
-if (
-  process.env.ALLOW_DISPOSABLE_DATABASE !== "1" ||
-  !/(test|qa)[^/\\]*\.db$/i.test(process.env.DATABASE_URL || "")
-)
-  throw new Error("Disposable database required");
+import { PrismaClient } from "wms-prisma-client";
+requireDisposableDatabase();
 const db = new PrismaClient();
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3006";
 assert.ok(["localhost", "127.0.0.1"].includes(new URL(base).hostname));
@@ -789,7 +786,7 @@ try {
         balance.qtyOnHand,
       );
   }
-  assert.deepEqual(await db.$queryRawUnsafe("PRAGMA foreign_key_check"), []);
+  await assertForeignKeysValid(db);
   console.log(
     "PASS: instructor approval, isolated individual/team clones, deterministic shortage/excess/urgent cases, shared blind count, task/role restrictions, server metrics and retry deduplication, individual competence evidence, private results, frozen research instruments, hidden answer keys, validated/idempotent answers, paired pseudonyms, protected CSV and preserved template stock.",
   );

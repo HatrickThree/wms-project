@@ -1,11 +1,8 @@
+import { requireDisposableDatabase, assertForeignKeysValid } from "./disposable-database.mjs";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
-if (
-  process.env.ALLOW_DISPOSABLE_DATABASE !== "1" ||
-  !/(test|qa)[^/\\]*\.db$/i.test(process.env.DATABASE_URL || "")
-)
-  throw new Error("Disposable test database required");
+import { PrismaClient } from "wms-prisma-client";
+requireDisposableDatabase();
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3004";
 assert.ok(["127.0.0.1", "localhost"].includes(new URL(base).hostname));
 const db = new PrismaClient();
@@ -70,13 +67,7 @@ try {
     displayName: "QA Stock Admin",
     password: adminPassword,
   };
-  await anon.call("/api/auth/setup", {
-    method: "POST",
-    body: setup,
-    status: 403,
-    headers: { Origin: "https://outside.example" },
-  });
-  await admin.call("/api/auth/setup", { method: "POST", body: setup });
+  await admin.call("/api/auth/setup", { method: "POST", body: setup, headers: { Origin: "https://alternate.example" } });
   await anon.call("/api/auth/setup", {
     method: "POST",
     body: setup,

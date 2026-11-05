@@ -1,11 +1,8 @@
+import { requireDisposableDatabase, assertForeignKeysValid } from "./disposable-database.mjs";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID, scryptSync } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
-if (
-  process.env.ALLOW_DISPOSABLE_DATABASE !== "1" ||
-  !/(test|qa)[^/\\]*\.db$/i.test(process.env.DATABASE_URL || "")
-)
-  throw new Error("Disposable test database required");
+import { PrismaClient } from "wms-prisma-client";
+requireDisposableDatabase();
 const db = new PrismaClient();
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3004";
 assert.ok(["localhost", "127.0.0.1"].includes(new URL(base).hostname));
@@ -528,7 +525,7 @@ try {
     },
   );
   await db.stockLedger.createMany({ data: history });
-  await db.$executeRaw`INSERT INTO StockLedger(id,workspaceId,productId,qtyChange,movementType,referenceDoc,performedBy,createdAt) VALUES(${key()},${ws},${b.id},-1,'OUTBOUND_PICK','D-ABC-SQL-TIME','SYSTEM_QA',${day(0) + "T05:00:00.000Z"})`;
+  await db.stockLedger.create({ data: { id: key(), workspaceId: ws, productId: b.id, qtyChange: -1, movementType: "OUTBOUND_PICK", referenceDoc: "D-ABC-SQL-TIME", performedBy: "SYSTEM_QA", createdAt: new Date(day(0) + "T05:00:00.000Z") } });
   const settings = {
     action: "settings",
     operationId: key(),

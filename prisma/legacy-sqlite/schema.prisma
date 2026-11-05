@@ -1,0 +1,573 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum LocationType {
+  RECEIVING   // จุดพักรับสินค้าเข้า
+  STORAGE     // ชั้นวางจัดเก็บปกติ
+  PICKING     // จุดหยิบสินค้า
+  PACKING     // จุดแพ็คเตรียมส่ง
+  QUARANTINE  // โซนสินค้าชำรุด / รอตรวจสอบเคลม (RMA)
+}
+
+enum SerialStatus {
+  IN_STOCK    // อยู่ในคลังสินค้า (พร้อมใช้งาน/พร้อมขาย)
+  ALLOCATED   // ถูกจองไว้สำหรับใบสั่งขาย/ใบเบิกแล้ว
+  PICKED      // หยิบแล้ว รอยืนยันจ่าย
+  MISSING     // ไม่พบจากการตรวจนับที่อนุมัติแล้ว
+  SHIPPED     // จ่ายออกจากคลัง/ส่งมอบให้ลูกค้าแล้ว
+  RETURNED    // รับคืนจากลูกค้า (อยู่ระหว่างตรวจสอบ)
+  DEFECTIVE   // ชำรุด/เสีย (ห้ามหยิบขาย)
+}
+
+enum MovementType {
+  INBOUND_RECEIVE   // รับสินค้าเข้าคลัง
+  PUTAWAY           // ย้ายจากจุดรับเข้าขึ้นชั้นวาง
+  INTERNAL_TRANSFER // ย้ายข้ามชั้นวาง
+  OUTBOUND_PICK     // หยิบจ่ายออกจากคลัง
+  OUTBOUND_SHIP
+  RETURN_IN         // รับสินค้าคืนเข้าคลัง
+  ADJUSTMENT_PLUS   // ปรับเพิ่มสต็อกจากผลตรวจนับ
+  ADJUSTMENT_MINUS  // ปรับลดสต็อกจากผลตรวจนับ
+}
+
+model Warehouse {
+  id        String     @id @default(cuid())
+  workspaceId String
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  code      String
+  name      String
+  locations Location[]
+  createdAt DateTime   @default(now())
+  map WarehouseMap?
+  pickingPlans PickingPlan[]
+  @@unique([workspaceId, code])
+}
+
+model Location {
+  id          String             @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  warehouseId String
+  warehouse   Warehouse          @relation(fields: [warehouseId], references: [id])
+  barcode     String             // เช่น A-01-01-01
+  zone        String
+  aisle       String
+  rack        String
+  level       String
+  type        LocationType       @default(STORAGE)
+  inventories InventoryBalance[]
+  serialItems SerialItem[]
+  layers StockLayer[]
+  @@unique([workspaceId, barcode])
+}
+
+model Product {
+  id          String             @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  sku         String
+  barcode     String
+  name        String
+  category    String?
+  baseUom     String             @default("PCS")
+  minStock    Int                @default(0)
+  trackSerial Boolean            @default(true)
+  trackLot    Boolean            @default(false)
+  issuePolicy IssuePolicy        @default(FIFO)
+  lots StockLot[]
+  layers StockLayer[]
+  orderLines OrderLine[]
+  units ProductUnit[]
+  abcProfile ABCProfile?
+  abcHistory ABCAssignment[]
+  counts CountRun[]
+  inventories InventoryBalance[]
+  serialItems SerialItem[]
+  movements   StockLedger[]
+  createdAt   DateTime           @default(now())
+  @@unique([workspaceId, sku])
+  @@unique([workspaceId, barcode])
+}
+
+model InventoryBalance {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  locationId   String
+  location     Location @relation(fields: [locationId], references: [id])
+  qtyOnHand    Int      @default(0)
+  qtyAllocated Int      @default(0)
+  version Int @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([productId, locationId])
+}
+
+model SerialItem {
+  id            String        @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  serialNumber  String
+  productId     String
+  product       Product       @relation(fields: [productId], references: [id])
+  locationId    String?
+  location      Location?     @relation(fields: [locationId], references: [id])
+  status        SerialStatus  @default(IN_STOCK)
+  lotNumber     String?
+  stockLayerId  String?
+  stockLayer StockLayer? @relation(fields: [stockLayerId], references: [id])
+  allocations StockAllocation[]
+  inboundDocNo  String
+  outboundDocNo String?
+  receivedAt    DateTime      @default(now())
+  shippedAt     DateTime?
+  warrantyExp   DateTime?
+  movements     StockLedger[]
+  updatedAt     DateTime      @updatedAt
+
+  @@index([productId, status])
+  @@unique([workspaceId, serialNumber])
+  @@index([locationId])
+}
+
+model StockLedger {
+  id             String       @id @default(cuid())
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+  productId      String
+  product        Product      @relation(fields: [productId], references: [id])
+  serialItemId   String?
+  serialItem     SerialItem?  @relation(fields: [serialItemId], references: [id])
+  fromLocationId String?
+  toLocationId   String?
+  qtyChange      Int
+  movementType   MovementType
+  referenceDoc   String
+  performedBy    String
+  note           String?
+  createdAt      DateTime     @default(now())
+
+  @@index([productId, createdAt])
+  @@index([serialItemId])
+  @@index([referenceDoc])
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+  INSTRUCTOR
+  STUDENT
+}
+
+enum WorkspaceType {
+  BUSINESS
+  TRAINING
+}
+
+model User {
+  id String @id @default(cuid())
+  username String @unique
+  displayName String
+  passwordHash String
+  role UserRole
+  disabled Boolean @default(false)
+  createdAt DateTime @default(now())
+  sessions UserSession[]
+  memberships WorkspaceMember[]
+  ownedWorkspaces Workspace[] @relation("WorkspaceOwner")
+}
+
+model UserSession {
+  id String @id @default(cuid())
+  tokenHash String @unique
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeWorkspaceId String?
+  activeWorkspace Workspace? @relation(fields: [activeWorkspaceId], references: [id], onDelete: SetNull)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Workspace {
+  id String @id @default(cuid())
+  code String @unique
+  name String
+  type WorkspaceType
+  ownerId String?
+  deletion WorkspaceDeletion?
+  owner User? @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  maps WarehouseMap[]
+  pickingPlans PickingPlan[]
+  lessons TrainingLesson[]
+  trainingRound TrainingRound?
+  researchForms ResearchForm[]
+  members WorkspaceMember[]
+  sessions UserSession[]
+  warehouses Warehouse[]
+  locations Location[]
+  products Product[]
+  balances InventoryBalance[]
+  serials SerialItem[]
+  movements StockLedger[]
+  lots StockLot[]
+  layers StockLayer[]
+  orders StockOrder[]
+  operations StockOperation[]
+  units ProductUnit[]
+  abcSettings ABCSettings?
+  abcProfiles ABCProfile[]
+  abcRuns ABCRun[]
+  abcAssignments ABCAssignment[]
+  countRuns CountRun[]
+  operationalEvents OperationalEvent[]
+}
+
+model WorkspaceDeletion {
+ workspaceId String @id
+ workspace Workspace @relation(fields:[workspaceId],references:[id])
+ deletedAt DateTime @default(now())
+ deletedBy String
+}
+
+model WorkspaceMember {
+  workspaceId String
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@id([workspaceId, userId])
+  @@index([userId])
+}
+
+model LoginAttempt {
+  username String @id
+  failures Int @default(0)
+  lockedUntil DateTime?
+  updatedAt DateTime @updatedAt
+}
+
+
+enum IssuePolicy {
+  FIFO
+  FEFO
+}
+enum OrderStatus {
+  DRAFT
+  RESERVED
+  PICKED
+  SHIPPED
+  CANCELLED
+}
+model StockLot {
+  id String @id @default(cuid())
+  workspaceId String
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  productId String
+  product Product @relation(fields: [productId], references: [id])
+  number String
+  expiresOn String?
+  createdAt DateTime @default(now())
+  layers StockLayer[]
+  @@unique([productId, number])
+  @@index([workspaceId, expiresOn])
+}
+model StockLayer {
+  id String @id @default(cuid())
+  workspaceId String
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  productId String
+  product Product @relation(fields: [productId], references: [id])
+  locationId String
+  location Location @relation(fields: [locationId], references: [id])
+  lotId String?
+  lot StockLot? @relation(fields: [lotId], references: [id])
+  receivedAt DateTime @default(now())
+  referenceDoc String
+  qtyOnHand Int @default(0)
+  qtyAllocated Int @default(0)
+  serials SerialItem[]
+  allocations StockAllocation[]
+  @@index([workspaceId, productId, locationId])
+}
+model StockOperation {
+  id String @id @default(cuid())
+  workspaceId String
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  key String
+  payloadHash String
+  resultJson String
+  createdAt DateTime @default(now())
+  @@unique([workspaceId, key])
+}
+model StockOrder {
+  id String @id @default(cuid())
+  workspaceId String
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  number String
+  status OrderStatus @default(DRAFT)
+  createdBy String
+  createdAt DateTime @default(now())
+  reservedAt DateTime?
+  shippedAt DateTime?
+  lines OrderLine[]
+  pickingPlans PickingPlan[]
+  @@unique([workspaceId, number])
+  @@index([workspaceId, createdAt])
+}
+model OrderLine {
+  id String @id @default(cuid())
+  orderId String
+  order StockOrder @relation(fields: [orderId], references: [id])
+  productId String
+  product Product @relation(fields: [productId], references: [id])
+  quantity Int
+  requestedQuantity Int @default(1)
+  requestedUom String @default("PCS")
+  conversionFactor Int @default(1)
+  allocations StockAllocation[]
+  @@unique([orderId, productId])
+}
+
+model ProductUnit {
+  id String @id @default(cuid())
+  workspaceId String
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  productId String
+  product Product @relation(fields: [productId], references: [id])
+  name String
+  factor Int
+  active Boolean @default(true)
+  @@unique([productId, name])
+}
+model StockAllocation {
+  id String @id @default(cuid())
+  orderLineId String
+  orderLine OrderLine @relation(fields: [orderLineId], references: [id])
+  stockLayerId String
+  stockLayer StockLayer @relation(fields: [stockLayerId], references: [id])
+  serialItemId String?
+  serialItem SerialItem? @relation(fields: [serialItemId], references: [id])
+  quantity Int
+  pickedAt DateTime?
+  pickedBy String?
+  overrideReason String?
+  overrideBy String?
+  @@index([orderLineId])
+  @@index([stockLayerId])
+}
+
+
+model ABCSettings {
+ workspaceId String @id
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ windowDays Int @default(90)
+ thresholdA Int @default(80)
+ thresholdB Int @default(95)
+ tieRule String?
+ daysA Int?
+ daysB Int?
+ daysC Int?
+ updatedAt DateTime @updatedAt
+ updatedBy String
+}
+model ABCProfile {
+ productId String @id
+ product Product @relation(fields:[productId], references:[id])
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ class String?
+ confirmedAt DateTime?
+ confirmedBy String?
+ lastCountedAt DateTime?
+}
+model ABCRun {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ fromDate String
+ toDate String
+ thresholdA Int
+ thresholdB Int
+ tieRule String
+ resultsJson String
+ createdAt DateTime @default(now())
+ createdBy String
+ assignments ABCAssignment[]
+ @@index([workspaceId,createdAt])
+}
+model ABCAssignment {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ productId String
+ product Product @relation(fields:[productId],references:[id])
+ runId String
+ run ABCRun @relation(fields:[runId],references:[id])
+ oldClass String?
+ newClass String
+ reason String?
+ confirmedAt DateTime @default(now())
+ confirmedBy String
+ @@index([workspaceId,productId,confirmedAt])
+}
+model OperationalEvent {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ operationKey String
+ type String
+ actor String
+ detailsJson String
+ createdAt DateTime @default(now())
+ @@index([workspaceId,createdAt])
+ @@unique([workspaceId,operationKey])
+}
+model CountRun {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ productId String
+ product Product @relation(fields:[productId],references:[id])
+ number String
+ status String @default("OPEN")
+ mode String
+ snapshotJson String
+ startedAt DateTime @default(now())
+ startedBy String
+ submittedAt DateTime?
+ approvedAt DateTime?
+ approvedBy String?
+ reason String?
+ entries CountEntry[]
+ @@unique([workspaceId,number])
+ @@index([workspaceId,productId,status])
+}
+model CountEntry {
+ id String @id @default(cuid())
+ runId String
+ run CountRun @relation(fields:[runId],references:[id])
+ locationId String
+ lotNumber String @default("")
+ expiresOn String?
+ actualQuantity Int?
+ enteredQuantity Int?
+ enteredUom String?
+ conversionFactor Int?
+ serialsJson String @default("[]")
+ countedBy String?
+ countedAt DateTime?
+ @@unique([runId,locationId,lotNumber])
+}
+
+model WarehouseMap {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ warehouseId String @unique
+ warehouse Warehouse @relation(fields:[warehouseId], references:[id])
+ version Int @default(1)
+ graphJson String
+ updatedAt DateTime @updatedAt
+ updatedBy String
+}
+model PickingPlan {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId], references:[id])
+ orderId String
+ order StockOrder @relation(fields:[orderId],references:[id])
+ warehouseId String
+ warehouse Warehouse @relation(fields:[warehouseId],references:[id])
+ mapVersion Int
+ snapshotJson String
+ resultJson String
+ createdAt DateTime @default(now())
+ createdBy String
+ @@index([workspaceId, orderId, createdAt])
+}
+
+model TrainingLesson {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId],references:[id])
+ title String
+ status String @default("DRAFT")
+ configJson String
+ approvedBy String?
+ approvedAt DateTime?
+ createdBy String
+ createdAt DateTime @default(now())
+ rounds TrainingRound[]
+ @@index([workspaceId,createdAt])
+}
+model TrainingRound {
+ id String @id @default(cuid())
+ lessonId String
+ lesson TrainingLesson @relation(fields:[lessonId],references:[id])
+ workspaceId String @unique
+ workspace Workspace @relation(fields:[workspaceId],references:[id])
+ name String
+ status String @default("READY")
+ seed String
+ fixtureHash String
+ configJson String
+ truthJson String
+ assessmentJson String?
+ startedAt DateTime?
+ submittedAt DateTime?
+ reviewedAt DateTime?
+ reviewedBy String?
+ createdAt DateTime @default(now())
+ events TrainingEvent[]
+ @@index([lessonId])
+}
+model TrainingEvent {
+ id String @id @default(cuid())
+ roundId String
+ round TrainingRound @relation(fields:[roundId],references:[id])
+ operationKey String
+ actor String
+ actorRole String
+ type String
+ success Boolean
+ detailsJson String
+ createdAt DateTime @default(now())
+ @@unique([roundId,operationKey])
+ @@index([roundId,createdAt])
+}
+model ResearchForm {
+ id String @id @default(cuid())
+ workspaceId String
+ workspace Workspace @relation(fields:[workspaceId],references:[id])
+ title String
+ kind String
+ status String @default("DRAFT")
+ configJson String
+ approvedAt DateTime?
+ approvedBy String?
+ createdBy String
+ createdAt DateTime @default(now())
+ responses ResearchResponse[]
+ @@index([workspaceId,createdAt])
+}
+model ResearchResponse {
+ id String @id @default(cuid())
+ formId String
+ form ResearchForm @relation(fields:[formId],references:[id])
+ userId String
+ respondentCode String
+ answersJson String
+ submittedAt DateTime @default(now())
+ @@unique([formId,userId])
+}

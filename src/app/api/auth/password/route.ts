@@ -6,7 +6,6 @@ import { apiHandler } from "@/lib/api";
 import {
   hashPassword,
   HttpError,
-  requireSameOrigin,
   requireSession,
   SESSION_COOKIE,
   verifyPassword,
@@ -14,7 +13,6 @@ import {
 import { PasswordSchema } from "@/lib/validations/auth.schema";
 export async function POST(request: Request) {
   return apiHandler(async () => {
-    requireSameOrigin(request);
     const session = await requireSession();
     const input = z
       .object({

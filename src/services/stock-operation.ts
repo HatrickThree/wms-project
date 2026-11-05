@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "wms-prisma-client";
 import { prisma } from "@/lib/db";
 import { HttpError, type WorkspaceAccess } from "@/lib/auth";
 import { LessonConfigSchema, operationTasks } from "@/lib/training";

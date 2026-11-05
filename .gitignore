@@ -11,3 +11,9 @@ prisma/*.db-shm
 *.log
 .DS_Store
 *.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+.local/
+src/generated/prisma/

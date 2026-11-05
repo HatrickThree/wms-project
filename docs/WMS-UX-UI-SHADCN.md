@@ -22,7 +22,7 @@
 
 ### 1.1 ฐานโปรเจกต์ก่อนเริ่มปรับหน้าจอ
 
-- Next.js App Router, React, TypeScript, Tailwind CSS 3, Prisma, SQLite และ Zod
+- Next.js App Router, React, TypeScript, Tailwind CSS 3, Prisma, PostgreSQL (Supabase) และ Zod
 - หน้าภาพรวม `/`, ค้นหาสต็อก `/inventory`, รับเข้า `/inbound`, จ่ายออก `/outbound`, ประวัติ `/serials`
 - API รับเข้า จ่ายออก ค้นหาสต็อก และตรวจสอบ Serial
 - Service ย้ายตำแหน่งสินค้า แต่ยังไม่มีหน้าและ API สำหรับงานย้ายตามโครงสร้างที่ตรวจพบ

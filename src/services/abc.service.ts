@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "wms-prisma-client";
 import { prisma } from "@/lib/db";
 import { HttpError, type WorkspaceAccess } from "@/lib/auth";
 import { requireStockApproval } from "@/lib/warehouse-permissions";
@@ -168,7 +168,7 @@ export async function analyzeABC(input: unknown, access: WorkspaceAccess) {
       const frequencies = await tx.$queryRaw<
         { productId: string; frequency: bigint }[]
       >(
-        Prisma.sql`SELECT productId,COUNT(DISTINCT referenceDoc) AS frequency FROM StockLedger WHERE workspaceId=${workspaceId} AND movementType IN ('OUTBOUND_PICK','OUTBOUND_SHIP') AND qtyChange<0 AND (CASE WHEN typeof(createdAt) IN ('integer','real') THEN createdAt ELSE unixepoch(createdAt)*1000 END)>=${from} AND (CASE WHEN typeof(createdAt) IN ('integer','real') THEN createdAt ELSE unixepoch(createdAt)*1000 END)<${until} GROUP BY productId`,
+        Prisma.sql`SELECT "productId",COUNT(DISTINCT "referenceDoc") AS frequency FROM "StockLedger" WHERE "workspaceId"=${workspaceId} AND "movementType" IN ('OUTBOUND_PICK','OUTBOUND_SHIP') AND "qtyChange"<0 AND "createdAt">=${new Date(from)} AND "createdAt"<${new Date(until)} GROUP BY "productId"`,
       );
       const byId = new Map(
         frequencies.map((x) => [x.productId, Number(x.frequency)]),

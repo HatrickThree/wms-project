@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import type { SerialStatus } from "@prisma/client";
+import type { SerialStatus } from "wms-prisma-client";
 import { HttpError, type WorkspaceAccess } from "@/lib/auth";
 import {
   requireStockApproval,

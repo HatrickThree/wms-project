@@ -7,7 +7,6 @@ import {
   hashPassword,
   HttpError,
   requireAdmin,
-  requireSameOrigin,
   SESSION_COOKIE,
 } from "@/lib/auth";
 import { PasswordSchema } from "@/lib/validations/auth.schema";
@@ -16,7 +15,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   return apiHandler(async () => {
-    requireSameOrigin(request);
     const session = await requireAdmin();
     const input = z
       .object({

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { apiHandler } from "@/lib/api";
-import { HttpError, requireSameOrigin, requireSession } from "@/lib/auth";
+import { HttpError, requireSession } from "@/lib/auth";
 import { workspaceDeletion } from "@/lib/workspace-state";
 
 async function manageableWorkspace(id: string) {
@@ -63,7 +63,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   return apiHandler(async () => {
-    requireSameOrigin(request);
     const { workspace, user } = await manageableWorkspace((await params).id);
     if (
       await prisma.trainingRound.findUnique({
@@ -122,7 +121,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   return apiHandler(async () => {
-    requireSameOrigin(request);
     const { workspace } = await manageableWorkspace((await params).id);
     if (
       await prisma.trainingRound.findUnique({

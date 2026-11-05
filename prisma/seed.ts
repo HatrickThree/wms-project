@@ -3,7 +3,7 @@ import {
   LocationType,
   MovementType,
   SerialStatus,
-} from "@prisma/client";
+} from "wms-prisma-client";
 
 const prisma = new PrismaClient();
 
@@ -16,7 +16,7 @@ async function main() {
     throw new Error(
       "Seed requires an empty disposable database; existing users or stock found.",
     );
-  console.log("Seeding In-House WMS SQLite database with rich sample data...");
+  console.log("Seeding In-House WMS PostgreSQL database with rich sample data...");
   const workspace = await prisma.workspace.upsert({
     where: { id: "business-main" },
     update: {},

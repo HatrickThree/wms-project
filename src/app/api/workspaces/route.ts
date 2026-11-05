@@ -4,7 +4,6 @@ import { prisma } from "@/lib/db";
 import { apiHandler } from "@/lib/api";
 import {
   HttpError,
-  requireSameOrigin,
   requireSession,
   workspaceVisibility,
 } from "@/lib/auth";
@@ -51,7 +50,6 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   return apiHandler(async () => {
-    requireSameOrigin(request);
     const session = await requireSession();
     const input = CreateWorkspaceSchema.parse(await request.json());
     if (

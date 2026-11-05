@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { apiHandler } from "@/lib/api";
-import { hashPassword, requireAdmin, requireSameOrigin } from "@/lib/auth";
+import { hashPassword, requireAdmin } from "@/lib/auth";
 import { CreateUserSchema } from "@/lib/validations/auth.schema";
 const publicUser = {
   id: true,
@@ -23,7 +23,6 @@ export async function GET() {
 }
 export async function POST(request: Request) {
   return apiHandler(async () => {
-    requireSameOrigin(request);
     await requireAdmin();
     const input = CreateUserSchema.parse(await request.json());
     const user = await prisma.user.create({

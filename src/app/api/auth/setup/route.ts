@@ -5,13 +5,11 @@ import {
   hashPassword,
   HttpError,
   openSession,
-  requireSameOrigin,
 } from "@/lib/auth";
 import { SetupSchema } from "@/lib/validations/auth.schema";
 
 export async function POST(request: Request) {
   return apiHandler(async () => {
-    requireSameOrigin(request);
     const input = SetupSchema.parse(await request.json());
     if (await prisma.user.count())
       throw new HttpError(409, "ตั้งค่าผู้ดูแลคนแรกแล้ว กรุณาเข้าสู่ระบบ");

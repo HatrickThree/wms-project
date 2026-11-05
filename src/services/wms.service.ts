@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { SerialStatus } from "@prisma/client";
+import { SerialStatus } from "wms-prisma-client";
 import type { WorkspaceAccess } from "@/lib/auth";
 
 // Stock mutations use receiving/orders/transfers services with scoped idempotent operations.

@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "wms-prisma-client";
 import { prisma } from "@/lib/db";
 import { HttpError, type WorkspaceAccess } from "@/lib/auth";
 import {

@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "wms-prisma-client";
 import { HttpError } from "@/lib/auth";
 export async function requireUnlockedProducts(
   tx: Prisma.TransactionClient,

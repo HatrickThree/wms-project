@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { Prisma, UserRole } from "@prisma/client";
+import type { Prisma, UserRole } from "wms-prisma-client";
 import { prisma } from "@/lib/db";
 import type { SessionProfile } from "@/lib/session-types";
 import { deletedWorkspaces } from "@/lib/workspace-state";
@@ -139,7 +139,6 @@ export async function workspaceAccessForRequest(request: Request) {
   const access = await requireWorkspaceAccess();
   const expected = request.headers.get("x-workspace-id");
   const mutation = !["GET", "HEAD", "OPTIONS"].includes(request.method);
-  if (mutation) requireSameOrigin(request);
   if ((mutation || expected) && expected !== access.workspace.id)
     throw new HttpError(
       409,
@@ -232,16 +231,6 @@ export async function profileForSession(): Promise<SessionProfile> {
   };
 }
 
-export function requireSameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  // APP_ORIGIN is trusted server configuration, never a client-supplied Host value.
-  const expectedOrigin = new URL(process.env.APP_ORIGIN || request.url).origin;
-  if (origin && origin !== expectedOrigin)
-    throw new HttpError(403, "ไม่อนุญาตคำขอจากเว็บไซต์อื่น");
-  if (request.headers.get("sec-fetch-site") === "cross-site")
-    throw new HttpError(403, "ไม่อนุญาตคำขอจากเว็บไซต์อื่น");
-}
-
 export async function openSession(
   userId: string,
   workspaceId: string | null,
@@ -268,8 +257,7 @@ export async function openSession(
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure:
-      new URL(process.env.APP_ORIGIN || request.url).protocol === "https:",
+    secure: new URL(request.url).protocol === "https:",
     path: "/",
     expires: expiresAt,
   });

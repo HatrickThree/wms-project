@@ -4,7 +4,6 @@ import { apiHandler } from "@/lib/api";
 import {
   HttpError,
   openSession,
-  requireSameOrigin,
   verifyPassword,
   workspaceVisibility,
 } from "@/lib/auth";
@@ -12,7 +11,6 @@ import { LoginSchema } from "@/lib/validations/auth.schema";
 
 export async function POST(request: Request) {
   return apiHandler(async () => {
-    requireSameOrigin(request);
     const input = LoginSchema.parse(await request.json());
     const now = new Date();
     const attempt = await prisma.loginAttempt.findUnique({

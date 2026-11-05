@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "check": "node scripts/check-build.mjs",
     "start": "next start",
     "lint": "next lint",
@@ -12,7 +12,11 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate",
+    "db:deploy": "prisma migrate deploy",
+    "db:export:sqlite": "node --env-file=.env scripts/sqlite-transfer.mjs export",
+    "db:import:sqlite": "node --env-file=.env scripts/sqlite-transfer.mjs import"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

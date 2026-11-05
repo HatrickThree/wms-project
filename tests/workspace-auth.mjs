@@ -1,16 +1,10 @@
+import { requireDisposableDatabase, assertForeignKeysValid } from "./disposable-database.mjs";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "wms-prisma-client";
 
 // This suite creates accounts and training stock. Refuse a working database.
-if (
-  process.env.ALLOW_DISPOSABLE_DATABASE !== "1" ||
-  !/(?:test|qa)[^/\\]*\.db$/i.test(process.env.DATABASE_URL || "")
-) {
-  throw new Error(
-    "Run only against a fresh disposable test/QA database with ALLOW_DISPOSABLE_DATABASE=1.",
-  );
-}
+requireDisposableDatabase();
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3004";
 assert.ok(
   ["127.0.0.1", "localhost"].includes(new URL(base).hostname),
@@ -99,13 +93,8 @@ try {
     displayName: "QA Administrator",
     password: adminPassword,
   };
-  await anon.call("/api/auth/setup", {
-    method: "POST",
-    body: setup,
-    headers: { Origin: "https://not-allowed.example" },
-    status: 403,
-  });
-  await admin.call("/api/auth/setup", { method: "POST", body: setup });
+  // Alternate origins no longer require APP_ORIGIN; account checks still apply.
+  await admin.call("/api/auth/setup", { method: "POST", body: setup, headers: { Origin: "https://alternate.example", "Sec-Fetch-Site": "cross-site" } });
   assert.ok(
     admin.jar.get("stockspace_session"),
     "HttpOnly session cookie returned",

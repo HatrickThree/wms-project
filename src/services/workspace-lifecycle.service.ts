@@ -91,7 +91,7 @@ export async function changeWorkspaceState(
       throw new HttpError(409, "ชื่อพื้นที่ไม่ตรง กรุณาตรวจชื่อและยืนยันใหม่");
     if (action === "delete") {
       if (!deletion)
-        await tx.$executeRaw`INSERT INTO "WorkspaceDeletion" ("workspaceId","deletedAt","deletedBy") VALUES (${id},${new Date()},${session.user.username})`;
+        await tx.workspaceDeletion.create({ data: { workspaceId: id, deletedBy: session.user.username } });
       await tx.userSession.updateMany({
         where: { activeWorkspaceId: id },
         data: { activeWorkspaceId: null },
@@ -111,7 +111,7 @@ export async function changeWorkspaceState(
         409,
         "สถานะพื้นที่เปลี่ยนไปแล้ว โหลดรายการล่าสุดก่อนกู้คืน",
       );
-    await tx.$executeRaw`DELETE FROM "WorkspaceDeletion" WHERE "workspaceId"=${id}`;
+    await tx.workspaceDeletion.delete({ where: { workspaceId: id } });
     return {
       message: "กู้คืนพื้นที่แล้ว สมาชิกเดิมเลือกพื้นที่นี้เพื่อใช้งานต่อได้",
       deleted: false,
