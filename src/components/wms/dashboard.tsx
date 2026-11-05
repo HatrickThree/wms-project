@@ -14,8 +14,7 @@ import {
   ScanLine,
   TriangleAlert,
 } from "lucide-react";
-import { prisma } from "@/lib/db";
-import { businessToday } from "@/services/stock-operation";
+import { loadDashboard } from "@/services/dashboard.service";
 import type { WorkspaceAccess } from "@/lib/auth";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { movementLabels } from "@/lib/wms";
@@ -38,94 +37,6 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-
-async function loadDashboard(workspaceId: string) {
-  const [products, available, movements, locations] = await Promise.all([
-    prisma.product.findMany({
-      where: { workspaceId },
-      include: {
-        inventories: { include: { location: true } },
-        layers: { include: { location: true, lot: true } },
-      },
-      orderBy: { sku: "asc" },
-    }),
-    prisma.serialItem.groupBy({
-      by: ["productId"],
-      where: {
-        workspaceId,
-        status: "IN_STOCK",
-        AND: [
-          {
-            stockLayer: {
-              OR: [
-                { lotId: null },
-                { lot: { expiresOn: null } },
-                { lot: { expiresOn: { gte: businessToday() } } },
-              ],
-            },
-          },
-          {
-            OR: [
-              { product: { issuePolicy: "FIFO" } },
-              { stockLayer: { lot: { expiresOn: { gte: businessToday() } } } },
-            ],
-          },
-        ],
-        location: { type: { in: ["STORAGE", "PICKING"] } },
-      },
-      _count: { _all: true },
-    }),
-    prisma.stockLedger.findMany({
-      where: { workspaceId },
-      take: 7,
-      orderBy: { createdAt: "desc" },
-      include: { product: true, serialItem: true },
-    }),
-    prisma.location.count({ where: { workspaceId } }),
-  ]);
-  const readyMap = new Map(
-    available.map((item) => [item.productId, item._count._all]),
-  );
-  const units = new Map<string, number>();
-  const stock = products.map((product) => {
-    const onHand = product.inventories.reduce(
-      (sum, balance) => sum + balance.qtyOnHand,
-      0,
-    );
-    units.set(product.baseUom, (units.get(product.baseUom) || 0) + onHand);
-    const ready = product.trackSerial
-      ? readyMap.get(product.id) || 0
-      : product.layers
-          .filter(
-            (balance) =>
-              ["STORAGE", "PICKING"].includes(balance.location.type) &&
-              (!balance.lot?.expiresOn ||
-                balance.lot.expiresOn >= businessToday()) &&
-              (product.issuePolicy !== "FEFO" || !!balance.lot?.expiresOn),
-          )
-          .reduce(
-            (sum, balance) =>
-              sum + Math.max(0, balance.qtyOnHand - balance.qtyAllocated),
-            0,
-          );
-    return {
-      sku: product.sku,
-      name: product.name,
-      ready,
-      minStock: product.minStock,
-      unit: product.baseUom,
-    };
-  });
-  return {
-    products: products.length,
-    units: [...units],
-    readySerials: available.reduce((sum, item) => sum + item._count._all, 0),
-    low: stock.filter((product) => product.ready < product.minStock),
-    movements,
-    locations,
-    updatedAt: new Date(),
-  };
-}
 
 export async function Dashboard({ access }: { access: WorkspaceAccess }) {
   const data = await loadDashboard(access.workspace.id).catch(() => null);
@@ -167,7 +78,7 @@ export async function Dashboard({ access }: { access: WorkspaceAccess }) {
     },
     {
       label: "ต่ำกว่าจุดเตือน",
-      value: data ? formatNumber(data.low.length) : "—",
+      value: data ? formatNumber(data.lowCount) : "—",
       detail: "SKU ที่ยอดพร้อมจ่ายต่ำกว่าขั้นต่ำ",
       icon: TriangleAlert,
       color: "bg-amber-50 text-amber-700",
@@ -420,7 +331,7 @@ export async function Dashboard({ access }: { access: WorkspaceAccess }) {
               เปรียบเทียบยอดพร้อมจ่ายกับขั้นต่ำที่กำหนด
             </CardDescription>
           </div>
-          {data && <Badge variant="warning">{data.low.length} SKU</Badge>}
+          {data && <Badge variant="warning">{data.lowCount} SKU</Badge>}
         </CardHeader>
         <CardContent className="!px-0 !pb-0">
           {data?.low.length ? (

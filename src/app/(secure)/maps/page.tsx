@@ -2,7 +2,7 @@ import { WarehouseMapScreen } from "@/components/wms/warehouse-map";
 import { requirePageWorkspace } from "@/lib/auth";
 export const metadata = { title: "ผังคลังและเส้นทางหยิบ" };
 export default async function Page() {
-  const access = await requirePageWorkspace();
+  const access = await requirePageWorkspace("/maps");
   return (
     <WarehouseMapScreen
       canEdit={

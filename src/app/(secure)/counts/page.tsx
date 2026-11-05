@@ -3,7 +3,7 @@ import { requirePageWorkspace } from "@/lib/auth";
 import { redirect } from "next/navigation";
 export const metadata = { title: "ตรวจนับสินค้า" };
 export default async function Page() {
-  const access = await requirePageWorkspace();
+  const access = await requirePageWorkspace("/counts");
   if (access.user.role === "STUDENT" && access.trainingRound?.status !== "ACTIVE") redirect("/training");
   return <CountsScreen />;
 }

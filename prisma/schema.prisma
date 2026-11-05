@@ -111,6 +111,7 @@ model InventoryBalance {
   updatedAt    DateTime @updatedAt
 
   @@unique([productId, locationId])
+  @@index([workspaceId, productId])
 }
 
 model SerialItem {
@@ -138,6 +139,7 @@ model SerialItem {
   @@index([productId, status])
   @@unique([workspaceId, serialNumber])
   @@index([locationId])
+  @@index([workspaceId, status, productId])
 }
 
 model StockLedger {
@@ -160,6 +162,7 @@ model StockLedger {
   @@index([productId, createdAt])
   @@index([serialItemId])
   @@index([referenceDoc])
+  @@index([workspaceId, createdAt])
 }
 
 enum UserRole {

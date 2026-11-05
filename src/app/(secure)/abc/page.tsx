@@ -2,7 +2,7 @@ import { ABCScreen } from "@/components/wms/abc";
 import { requirePageWorkspace } from "@/lib/auth";
 export const metadata = { title: "ABC และรอบตรวจนับ" };
 export default async function Page() {
-  const access = await requirePageWorkspace();
+  const access = await requirePageWorkspace("/abc");
   return (
     <ABCScreen
       canApprove={

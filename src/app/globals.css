@@ -27,6 +27,25 @@
   }
   * {
     @apply border-border;
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b880 transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: #94a3b880;
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: #64748bb3;
+  }
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
   body {
     @apply bg-background text-foreground antialiased;

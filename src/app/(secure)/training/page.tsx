@@ -2,6 +2,6 @@ import { TrainingScreen } from "@/components/wms/training";
 import { requirePageWorkspace } from "@/lib/auth";
 export const metadata = { title: "ห้องเรียนและรอบฝึก" };
 export default async function Page() {
-  await requirePageWorkspace();
+  await requirePageWorkspace("/training");
   return <TrainingScreen />;
 }

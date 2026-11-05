@@ -8,22 +8,23 @@ import {
   workspaceVisibility,
 } from "@/lib/auth";
 import { LoginSchema } from "@/lib/validations/auth.schema";
+import { homePage } from "@/lib/page-access";
 
 export async function POST(request: Request) {
   return apiHandler(async () => {
     const input = LoginSchema.parse(await request.json());
     const now = new Date();
-    const attempt = await prisma.loginAttempt.findUnique({
-      where: { username: input.username },
-    });
+    const [attempt, user] = await Promise.all([
+      prisma.loginAttempt.findUnique({
+        where: { username: input.username },
+      }),
+      prisma.user.findUnique({ where: { username: input.username } }),
+    ]);
     if (attempt?.lockedUntil && attempt.lockedUntil > now)
       throw new HttpError(
         429,
         "ลองเข้าสู่ระบบหลายครั้งเกินไป กรุณารอ 15 นาทีแล้วลองใหม่",
       );
-    const user = await prisma.user.findUnique({
-      where: { username: input.username },
-    });
     const correct = await verifyPassword(input.password, user?.passwordHash);
     if (!correct || !user || user.disabled) {
       const stale =
@@ -44,18 +45,24 @@ export async function POST(request: Request) {
         "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง หรือบัญชียังไม่พร้อมใช้งาน",
       );
     }
-    await prisma.loginAttempt.deleteMany({
-      where: { username: user.username },
-    });
-    const workspace = await prisma.workspace.findFirst({
-      where: await workspaceVisibility(user),
-      orderBy: { createdAt: "asc" },
-      select: { id: true },
-    });
+    const [workspace] = await Promise.all([
+      prisma.workspace.findFirst({
+        where: await workspaceVisibility(user),
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      }),
+      ...(attempt
+        ? [
+            prisma.loginAttempt.deleteMany({
+              where: { username: user.username },
+            }),
+          ]
+        : []),
+    ]);
     await openSession(user.id, workspace?.id || null, request);
     return NextResponse.json({
       success: true,
-      data: { next: workspace ? "/" : "/workspaces" },
+      data: { next: workspace ? homePage(user.role) : "/workspaces" },
     });
   });
 }

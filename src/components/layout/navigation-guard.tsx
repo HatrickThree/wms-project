@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -26,12 +27,13 @@ const GuardContext = createContext<{
 }>({ setDirty: () => {}, navigate: () => {}, perform: () => {} });
 export function NavigationGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [dirty, setDirty] = useState(false);
   const [intent, setIntent] = useState<Intent | null>(null);
   const navigate = useCallback(
     (href: string) => {
       if (dirty) setIntent({ kind: "navigation", href });
-      else router.push(href);
+      else startTransition(() => router.push(href));
     },
     [dirty, router],
   );
@@ -53,6 +55,7 @@ export function NavigationGuard({ children }: { children: React.ReactNode }) {
   return (
     <GuardContext.Provider value={{ setDirty, navigate, perform }}>
       <div
+        aria-busy={pending}
         onClickCapture={(event) => {
           if (
             !dirty ||
@@ -86,6 +89,18 @@ export function NavigationGuard({ children }: { children: React.ReactNode }) {
       >
         {children}
       </div>
+      {pending && (
+        <div
+          role="status"
+          className="fixed inset-x-0 top-0 z-[100] flex items-center justify-center gap-2 border-b border-blue-100 bg-blue-50/95 p-2 text-sm text-blue-900 shadow-sm"
+        >
+          <span
+            aria-hidden="true"
+            className="size-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"
+          />
+          กำลังเปิดหน้า…
+        </div>
+      )}
       <AlertDialog
         open={!!intent}
         onOpenChange={(open) => {
@@ -107,7 +122,7 @@ export function NavigationGuard({ children }: { children: React.ReactNode }) {
                 setDirty(false);
                 setIntent(null);
                 if (next?.kind === "action") next.run();
-                else if (next) router.push(next.href);
+                else if (next) startTransition(() => router.push(next.href));
               }}
             >
               ออกจากหน้านี้

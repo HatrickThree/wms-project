@@ -41,6 +41,7 @@ import {
   useGuardedAction,
   useGuardedNavigation,
 } from "./navigation-guard";
+import { canAccessPage, homePage } from "@/lib/page-access";
 import { cn } from "@/lib/utils";
 import { Toaster } from "sonner";
 import { toast } from "sonner";
@@ -76,56 +77,33 @@ function Shell({
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   const allMenuItems = [
-    ...navigation.filter(
-      (item) =>
-        profile.user.role !== "STUDENT" ||
-        !["/inbound", "/outbound"].includes(item.href),
-    ),
-    ...(profile.user.role !== "STUDENT"
-      ? [
-          {
-            href: "/transfers",
-            label: "จัดเก็บ / ย้ายตำแหน่ง",
-            icon: ArrowLeftRight,
-          },
-          { href: "/counts", label: "ตรวจนับสินค้า", icon: ClipboardCheck },
-        ]
-      : []),
+    ...navigation,
+    {
+      href: "/transfers",
+      label: "จัดเก็บ / ย้ายตำแหน่ง",
+      icon: ArrowLeftRight,
+    },
+    { href: "/counts", label: "ตรวจนับสินค้า", icon: ClipboardCheck },
     { href: "/abc", label: "ABC / รอบตรวจนับ", icon: BarChart3 },
     { href: "/maps", label: "ผังคลัง / เส้นทางหยิบ", icon: MapPin },
     { href: "/activity", label: "บันทึกการทำงาน", icon: History },
-    ...(profile.workspace?.type === "TRAINING"
-      ? [
-          {
-            href: "/training",
-            label: "ห้องเรียน / รอบฝึก",
-            icon: GraduationCap,
-          },
-          {
-            href: "/research",
-            label: "แบบทดสอบ / แบบวิจัย",
-            icon: ClipboardCheck,
-          },
-        ]
-      : []),
-    ...(profile.user.role !== "STUDENT"
-      ? [{ href: "/catalog", label: "สินค้า คลัง และตำแหน่ง", icon: Warehouse }]
-      : []),
+    { href: "/training", label: "ห้องเรียน / รอบฝึก", icon: GraduationCap },
+    { href: "/research", label: "แบบทดสอบ / แบบวิจัย", icon: ClipboardCheck },
+    { href: "/catalog", label: "สินค้า คลัง และตำแหน่ง", icon: Warehouse },
     {
       href: "/workspaces",
       label: "พื้นที่ธุรกิจ / การฝึก",
       icon: PanelsTopLeft,
     },
-    ...(profile.user.role === "ADMIN"
-      ? [{ href: "/admin/users", label: "บัญชีผู้ใช้", icon: UsersRound }]
-      : []),
+    { href: "/admin/users", label: "บัญชีผู้ใช้", icon: UsersRound },
   ];
-  const menuItems =
-    profile.user.role === "STUDENT"
-      ? allMenuItems.filter((item) =>
-          ["/training", "/research", "/workspaces"].includes(item.href),
-        )
-      : allMenuItems;
+  const menuItems = allMenuItems.filter((item) =>
+    canAccessPage(profile, item.href),
+  );
+  const canSearch = canAccessPage(profile, "/inventory");
+  const homeHref = profile.workspace
+    ? homePage(profile.user.role)
+    : "/workspaces";
   const active = menuItems.find((item) => item.href === pathname);
   const signOut = () =>
     guardedAction(() => {
@@ -145,6 +123,7 @@ function Shell({
     <nav aria-label="เมนูหลัก" className="space-y-1.5">
       {menuItems.map(({ href, label, icon: Icon }) => (
         <Link
+          prefetch={false}
           key={href}
           href={href}
           title={compact ? label : undefined}
@@ -186,7 +165,8 @@ function Shell({
         )}
       >
         <Link
-          href="/"
+          prefetch={false}
+          href={homeHref}
           aria-label="WMS กลับหน้าภาพรวม"
           className={cn(
             "flex h-24 items-center gap-3",
@@ -217,6 +197,7 @@ function Shell({
           {!collapsed && (
             <div className="mb-2 px-3 text-xs text-slate-300">
               <Link
+                prefetch={false}
                 href="/account"
                 className="block truncate font-medium underline-offset-4 hover:underline"
               >
@@ -296,6 +277,7 @@ function Shell({
           <div className="flex min-w-0 items-center gap-2 text-sm">
             <Warehouse className="hidden size-4 text-muted-foreground sm:block" />
             <Link
+              prefetch={false}
               href="/workspaces"
               className="truncate font-medium underline-offset-4 hover:underline"
             >
@@ -318,45 +300,50 @@ function Shell({
               {active?.label || "พื้นที่ทำงาน"}
             </span>
           </div>
-          <form
-            className="ml-auto hidden w-full max-w-[320px] sm:block"
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault();
-              navigate(
-                `/inventory${query.trim() ? `?keyword=${encodeURIComponent(query.trim())}` : ""}`,
-              );
-            }}
-          >
-            <label htmlFor="global-search" className="sr-only">
-              ค้นหาสินค้าและ Serial
-            </label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
-              <Input
-                id="global-search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className="h-10 border-slate-200 bg-slate-50 pl-9"
-                placeholder="ค้นหาสินค้า / Serial..."
-              />
-            </div>
-          </form>
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className="ml-auto sm:hidden"
-          >
-            <Link href="/inventory" aria-label="ค้นหาสินค้า">
-              <Search />
-            </Link>
-          </Button>
+          {canSearch && (
+            <form
+              className="ml-auto hidden w-full max-w-[320px] sm:block"
+              role="search"
+              onSubmit={(event) => {
+                event.preventDefault();
+                navigate(
+                  `/inventory${query.trim() ? `?keyword=${encodeURIComponent(query.trim())}` : ""}`,
+                );
+              }}
+            >
+              <label htmlFor="global-search" className="sr-only">
+                ค้นหาสินค้าและ Serial
+              </label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+                <Input
+                  id="global-search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="h-10 border-slate-200 bg-slate-50 pl-9"
+                  placeholder="ค้นหาสินค้า / Serial..."
+                />
+              </div>
+            </form>
+          )}
+          {canSearch && (
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="ml-auto sm:hidden"
+            >
+              <Link prefetch={false} href="/inventory" aria-label="ค้นหาสินค้า">
+                <Search />
+              </Link>
+            </Button>
+          )}
           <div className="hidden h-7 w-px bg-border sm:block" />
           <div className="hidden sm:block">
             <SpeechSettingsControl />
           </div>
           <Link
+            prefetch={false}
             href="/account"
             aria-label="บัญชีผู้ใช้ของฉัน"
             title={profile.user.displayName}
@@ -397,6 +384,7 @@ function Shell({
           <SpeechSettingsControl fullWidth />
           <div className="space-y-3 border-t border-slate-700 pt-4">
             <Link
+              prefetch={false}
               href="/account"
               onClick={() => setMobileOpen(false)}
               className="block text-sm underline-offset-4 hover:underline"

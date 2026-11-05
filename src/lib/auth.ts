@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import type { Prisma, UserRole } from "wms-prisma-client";
 import { prisma } from "@/lib/db";
 import type { SessionProfile } from "@/lib/session-types";
-import { deletedWorkspaces } from "@/lib/workspace-state";
+import { canAccessPage } from "@/lib/page-access";
 
 const deriveKey = promisify(scrypt);
 export const SESSION_COOKIE = "stockspace_session";
@@ -61,7 +61,6 @@ export const readSession = cache(async () => {
           disabled: true,
         },
       },
-      activeWorkspace: true,
     },
   });
   if (!session || session.expiresAt <= new Date() || session.user.disabled)
@@ -74,7 +73,7 @@ export async function workspaceVisibility(user: {
   role: UserRole;
 }): Promise<Prisma.WorkspaceWhereInput> {
   const excluded = {
-    id: { notIn: (await deletedWorkspaces()).map((row) => row.workspaceId) },
+    deletion: { is: null },
   };
   if (user.role === "ADMIN") return excluded;
   return {
@@ -100,7 +99,7 @@ export async function requireAdmin() {
   return session;
 }
 
-export async function requireWorkspaceAccess() {
+export const requireWorkspaceAccess = cache(async () => {
   const session = await requireSession();
   if (!session.activeWorkspaceId)
     throw new HttpError(409, "กรุณาเลือกพื้นที่ธุรกิจหรือรอบฝึกก่อนใช้งาน");
@@ -111,26 +110,26 @@ export async function requireWorkspaceAccess() {
         await workspaceVisibility(session.user),
       ],
     },
+    include: {
+      trainingRound:
+        session.user.role === "STUDENT"
+          ? { select: { id: true, status: true, configJson: true } }
+          : false,
+    },
   });
   if (!workspace)
     throw new HttpError(
       403,
       "ไม่มีสิทธิ์เข้าถึงพื้นที่นี้ กรุณาเลือกพื้นที่ที่ได้รับมอบหมาย",
     );
-  const trainingRound =
-    session.user.role === "STUDENT"
-      ? await prisma.trainingRound.findUnique({
-          where: { workspaceId: workspace.id },
-          select: { id: true, status: true, configJson: true },
-        })
-      : null;
+  const { trainingRound, ...workspaceData } = workspace;
   return {
     user: session.user,
-    workspace,
+    workspace: workspaceData,
     sessionId: session.id,
     trainingRound,
   };
-}
+});
 export type WorkspaceAccess = Awaited<
   ReturnType<typeof requireWorkspaceAccess>
 >;
@@ -190,16 +189,34 @@ export async function workspaceAccessForRequest(request: Request) {
   return access;
 }
 
-export async function requirePageSession() {
-  if (!(await prisma.user.count())) redirect("/setup");
+export const requirePageSession = cache(async () => {
   const session = await readSession();
-  if (!session) redirect("/login");
-  return session;
+  if (session) return session;
+  if (!(await prisma.user.findFirst({ select: { id: true } })))
+    redirect("/setup");
+  redirect("/login");
+});
+
+function profileFromAccess(access: WorkspaceAccess): SessionProfile {
+  return {
+    user: access.user,
+    workspace: access.workspace,
+    trainingRound: access.trainingRound
+      ? {
+          status: access.trainingRound.status,
+          task: JSON.parse(access.trainingRound.configJson).task,
+        }
+      : null,
+  };
 }
-export async function requirePageWorkspace() {
+
+export async function requirePageWorkspace(path?: string) {
   await requirePageSession();
   try {
-    return await requireWorkspaceAccess();
+    const access = await requireWorkspaceAccess();
+    if (path && !canAccessPage(profileFromAccess(access), path))
+      redirect(access.user.role === "STUDENT" ? "/training" : "/workspaces");
+    return access;
   } catch (error) {
     if (error instanceof HttpError && error.status !== 401)
       redirect("/workspaces");
@@ -209,17 +226,14 @@ export async function requirePageWorkspace() {
 
 export async function profileForSession(): Promise<SessionProfile> {
   const session = await requirePageSession();
-  const workspace = session.activeWorkspaceId
-    ? await prisma.workspace.findFirst({
-        where: {
-          AND: [
-            { id: session.activeWorkspaceId },
-            await workspaceVisibility(session.user),
-          ],
-        },
-        select: { id: true, name: true, code: true, type: true },
-      })
-    : null;
+  let access: WorkspaceAccess | null = null;
+  if (session.activeWorkspaceId) {
+    try {
+      access = await requireWorkspaceAccess();
+    } catch (error) {
+      if (!(error instanceof HttpError)) throw error;
+    }
+  }
   return {
     user: {
       id: session.user.id,
@@ -227,7 +241,15 @@ export async function profileForSession(): Promise<SessionProfile> {
       displayName: session.user.displayName,
       role: session.user.role,
     },
-    workspace,
+    workspace: access
+      ? {
+          id: access.workspace.id,
+          name: access.workspace.name,
+          code: access.workspace.code,
+          type: access.workspace.type,
+        }
+      : null,
+    trainingRound: access ? profileFromAccess(access).trainingRound : null,
   };
 }
 

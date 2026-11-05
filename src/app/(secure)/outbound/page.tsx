@@ -2,7 +2,7 @@ import { OrdersScreen } from "@/components/wms/orders";
 import { requirePageWorkspace } from "@/lib/auth";
 export const metadata = { title: "จ่ายสินค้าออก" };
 export default async function Page() {
-  const access = await requirePageWorkspace();
+  const access = await requirePageWorkspace("/outbound");
   return (
     <OrdersScreen
       canApprove={

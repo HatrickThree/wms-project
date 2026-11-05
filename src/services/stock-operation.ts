@@ -5,9 +5,7 @@ import { HttpError, type WorkspaceAccess } from "@/lib/auth";
 import { LessonConfigSchema, operationTasks } from "@/lib/training";
 import { workspaceDeletion } from "@/lib/workspace-state";
 
-export function businessToday(now = new Date()) {
-  return new Date(now.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
-}
+export { businessToday } from "@/lib/business-date";
 
 // Persist the command and result with stock changes, so lost responses can be retried safely.
 export async function stockOperation<T>(

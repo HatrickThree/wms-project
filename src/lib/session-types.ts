@@ -13,4 +13,5 @@ export interface SessionProfile {
     type: "BUSINESS" | "TRAINING";
     code: string;
   } | null;
+  trainingRound?: { status: string; task: string } | null;
 }

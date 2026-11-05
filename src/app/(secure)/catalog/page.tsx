@@ -4,7 +4,7 @@ import { requireMasterDataAccess } from "@/lib/warehouse-permissions";
 import { redirect } from "next/navigation";
 export const metadata = { title: "สินค้า คลัง และตำแหน่ง" };
 export default async function Page() {
-  const access = await requirePageWorkspace();
+  const access = await requirePageWorkspace("/catalog");
   try {
     requireMasterDataAccess(access);
   } catch {

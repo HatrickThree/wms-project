@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Eye,
@@ -25,7 +24,6 @@ import { LoginSchema, SetupSchema } from "@/lib/validations/auth.schema";
 import { request } from "@/lib/wms";
 
 export function AuthScreen({ setup = false }: { setup?: boolean }) {
-  const router = useRouter();
   const [form, setForm] = useState({
     username: "",
     displayName: "",
@@ -33,6 +31,7 @@ export function AuthScreen({ setup = false }: { setup?: boolean }) {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   return (
@@ -92,15 +91,16 @@ export function AuthScreen({ setup = false }: { setup?: boolean }) {
                     },
                   );
                   setForm((previous) => ({ ...previous, password: "" }));
-                  router.replace(result.next);
-                  router.refresh();
+                  setOpening(true);
+                  // Identity changes start a fresh document, avoiding stale
+                  // protected route data and a second refresh request.
+                  window.location.replace(result.next);
                 } catch (failure) {
                   setError(
                     failure instanceof Error
                       ? failure.message
                       : "ยังเข้าสู่ระบบไม่ได้",
                   );
-                } finally {
                   setBusy(false);
                 }
               }}
@@ -204,7 +204,9 @@ export function AuthScreen({ setup = false }: { setup?: boolean }) {
               </div>
               <Button className="h-12 w-full" type="submit" disabled={busy}>
                 {busy ? (
-                  <BusyLabel>กำลังดำเนินการ…</BusyLabel>
+                  <BusyLabel>
+                    {opening ? "กำลังเปิดพื้นที่ทำงาน…" : "กำลังตรวจสอบบัญชี…"}
+                  </BusyLabel>
                 ) : (
                   <>
                     {setup ? <ShieldCheck /> : <LockKeyhole />}
@@ -213,6 +215,17 @@ export function AuthScreen({ setup = false }: { setup?: boolean }) {
                   </>
                 )}
               </Button>
+              {busy && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-center text-sm text-blue-900"
+                >
+                  {opening
+                    ? "เข้าสู่ระบบแล้ว กำลังโหลดพื้นที่ทำงาน"
+                    : "กำลังเข้าสู่ระบบ กรุณารอสักครู่"}
+                </div>
+              )}
             </form>
             <p className="mt-5 border-t pt-4 text-xs leading-relaxed text-muted-foreground">
               {setup

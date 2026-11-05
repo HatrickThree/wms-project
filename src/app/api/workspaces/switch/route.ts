@@ -2,11 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { apiHandler } from "@/lib/api";
-import {
-  HttpError,
-  requireSession,
-  workspaceVisibility,
-} from "@/lib/auth";
+import { homePage } from "@/lib/page-access";
+import { HttpError, requireSession, workspaceVisibility } from "@/lib/auth";
 export async function POST(request: Request) {
   return apiHandler(async () => {
     const session = await requireSession();
@@ -26,6 +23,9 @@ export async function POST(request: Request) {
       where: { id: session.id },
       data: { activeWorkspaceId: workspace.id },
     });
-    return NextResponse.json({ success: true, data: { next: "/" } });
+    return NextResponse.json({
+      success: true,
+      data: { next: homePage(session.user.role) },
+    });
   });
 }
