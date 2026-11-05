@@ -14,19 +14,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { BusyLabel, Feedback } from "./common";
+import { cameraMessage, preferredCamera } from "@/lib/camera";
 
 type Phase = "idle" | "starting" | "scanning" | "decoding" | "processing";
-
-function cameraMessage(error: unknown) {
-  const name = error instanceof DOMException ? error.name : String(error);
-  if (/NotAllowed|Permission|permission|denied/i.test(name))
-    return "ยังไม่ได้รับอนุญาตให้ใช้กล้อง เปิดสิทธิ์กล้องในเบราว์เซอร์ หรือเลือกอ่านจากภาพแทน";
-  if (/NotFound|DevicesNotFound/i.test(name))
-    return "ไม่พบกล้องบนอุปกรณ์นี้ เลือกอ่านจากภาพหรือพิมพ์รหัสเองได้";
-  if (/NotReadable|TrackStart|Could not start/i.test(name))
-    return "เปิดกล้องไม่ได้ กล้องอาจถูกใช้งานอยู่ ลองปิดแอปที่ใช้กล้องแล้วเปิดใหม่";
-  return "เปิดกล้องไม่ได้ กรุณาตรวจสิทธิ์และการเชื่อมต่อ หรือลองอ่านรหัสจากภาพแทน";
-}
 
 export function CameraScanner({
   onScan,
@@ -56,9 +46,14 @@ export function CameraScanner({
     const current = scanner.current;
     const pending = setup.current;
     // Capture tracks while the dialog still exists; its DOM may be gone by teardown.
-    const streams = Array.from(document.getElementById(elementId)?.querySelectorAll("video") || [])
+    const streams = Array.from(
+      document.getElementById(elementId)?.querySelectorAll("video") || [],
+    )
       .map((video) => video.srcObject)
-      .filter((stream): stream is MediaStream => stream instanceof MediaStream);
+      .filter(
+        (stream): stream is MediaStream =>
+          typeof MediaStream !== "undefined" && stream instanceof MediaStream,
+      );
     scanner.current = null;
     setup.current = null;
     cleanup.current = cleanup.current
@@ -78,11 +73,17 @@ export function CameraScanner({
         const container = document.getElementById(elementId);
         container?.querySelectorAll("video").forEach((video) => {
           const stream = video.srcObject;
-          if (stream instanceof MediaStream)
+          if (
+            typeof MediaStream !== "undefined" &&
+            stream instanceof MediaStream
+          )
             stream.getTracks().forEach((track) => track.stop());
         });
-      }).finally(() => {
-        streams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
+      })
+      .finally(() => {
+        streams.forEach((stream) =>
+          stream.getTracks().forEach((track) => track.stop()),
+        );
       });
     return cleanup.current;
   }, [elementId]);
@@ -178,7 +179,7 @@ export function CameraScanner({
       const instance = await createScanner(token);
       if (!instance) return;
       await instance.start(
-        { facingMode: { ideal: "environment" } },
+        preferredCamera,
         { fps: 8 },
         (code) => {
           if (token === session.current) void deliver(code);
