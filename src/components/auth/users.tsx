@@ -6,6 +6,7 @@ import {
   KeyRound,
   Plus,
   ShieldCheck,
+  Trash2,
   UserRound,
   UsersRound,
 } from "lucide-react";
@@ -58,6 +59,7 @@ interface UserItem {
   displayName: string;
   role: AppRole;
   disabled: boolean;
+  deletedAt: string | null;
 }
 const emptyUser = {
   username: "",
@@ -65,7 +67,7 @@ const emptyUser = {
   password: "",
   role: "STAFF" as AppRole,
 };
-export function UsersScreen() {
+export function UsersScreen({ currentUserId }: { currentUserId: string }) {
   const router = useRouter();
   const [users, setUsers] = useState<UserItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,14 +76,21 @@ export function UsersScreen() {
   const [refresh, setRefresh] = useState(0);
   const [editing, setEditing] = useState<{
     user: UserItem;
-    action: "password" | "status";
+    action: "password" | "status" | "delete" | "restore";
   } | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [confirmUsername, setConfirmUsername] = useState("");
+  const [showDeleted, setShowDeleted] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     setError(null);
-    request<UserItem[]>("/api/admin/users", { signal: controller.signal })
+    request<UserItem[]>(
+      showDeleted ? "/api/admin/users?deleted=1" : "/api/admin/users",
+      {
+        signal: controller.signal,
+      },
+    )
       .then((data) => {
         if (!controller.signal.aborted) setUsers(data);
       })
@@ -92,7 +101,7 @@ export function UsersScreen() {
           );
       });
     return () => controller.abort();
-  }, [refresh]);
+  }, [refresh, showDeleted]);
   return (
     <div className="page-container">
       <PageHeader
@@ -227,15 +236,33 @@ export function UsersScreen() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UsersRound className="size-4 text-muted-foreground" />
-            บัญชีในระบบ
+            {showDeleted ? "บัญชีที่ลบแล้ว" : "บัญชีในระบบ"}
           </CardTitle>
           <CardDescription>
-            การเปลี่ยนรหัสผ่านหรือปิดบัญชีจะยกเลิกการเข้าสู่ระบบของบัญชีนั้นทุกอุปกรณ์
+            {showDeleted
+              ? "กู้คืนบัญชีเพื่อให้กลับมาอยู่ในรายการ แล้วเปิดใช้งานอีกครั้งเมื่อต้องการ"
+              : "การเปลี่ยนรหัสผ่าน ปิดบัญชี หรือลบบัญชี จะให้บัญชีนั้นออกจากระบบทุกอุปกรณ์"}
           </CardDescription>
+          <label className="flex items-center gap-2 pt-2 text-sm">
+            <input
+              type="checkbox"
+              checked={showDeleted}
+              onChange={(event) => {
+                setUsers(null);
+                setShowDeleted(event.target.checked);
+              }}
+              disabled={busy}
+            />
+            แสดงบัญชีที่ลบแล้ว
+          </label>
         </CardHeader>
         <CardContent className="!px-0 !pb-0">
           {!users ? (
             <LoadingState />
+          ) : !users.length ? (
+            <p className="p-6 text-sm text-muted-foreground">
+              {showDeleted ? "ยังไม่มีบัญชีที่ลบแล้ว" : "ไม่พบบัญชีในรายการ"}
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -268,35 +295,72 @@ export function UsersScreen() {
                       <Badge
                         variant={user.disabled ? "destructive" : "success"}
                       >
-                        {user.disabled ? "ปิดใช้งาน" : "ใช้งานได้"}
+                        {user.deletedAt
+                          ? "ลบแล้ว"
+                          : user.disabled
+                            ? "ปิดใช้งาน"
+                            : "ใช้งานได้"}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={busy}
-                          onClick={() => {
-                            setEditing({ user, action: "password" });
-                            setNewPassword("");
-                            setDialogError(null);
-                          }}
-                        >
-                          <KeyRound />
-                          เปลี่ยนรหัสผ่าน
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={busy}
-                          onClick={() => {
-                            setEditing({ user, action: "status" });
-                            setDialogError(null);
-                          }}
-                        >
-                          {user.disabled ? "เปิดบัญชี" : "ปิดบัญชี"}
-                        </Button>
+                        {user.deletedAt ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => {
+                              setEditing({ user, action: "restore" });
+                              setDialogError(null);
+                            }}
+                          >
+                            กู้คืนบัญชี
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => {
+                                setEditing({ user, action: "password" });
+                                setNewPassword("");
+                                setDialogError(null);
+                              }}
+                            >
+                              <KeyRound />
+                              เปลี่ยนรหัสผ่าน
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => {
+                                setEditing({ user, action: "status" });
+                                setDialogError(null);
+                              }}
+                            >
+                              {user.disabled ? "เปิดบัญชี" : "ปิดบัญชี"}
+                            </Button>
+                            {user.id !== currentUserId && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                disabled={busy}
+                                aria-label={`ลบบัญชี ${user.username}`}
+                                onClick={() => {
+                                  setEditing({ user, action: "delete" });
+                                  setConfirmUsername("");
+                                  setDialogError(null);
+                                }}
+                              >
+                                <Trash2 />
+                                ลบบัญชี
+                              </Button>
+                            )}
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -314,15 +378,23 @@ export function UsersScreen() {
       >
         <DialogContent>
           <DialogTitle className="pr-10 text-lg font-semibold">
-            {editing?.action === "password"
-              ? "เปลี่ยนรหัสผ่านบัญชี"
-              : editing?.user.disabled
-                ? "เปิดใช้งานบัญชี"
-                : "ปิดใช้งานบัญชี"}
+            {editing?.action === "delete"
+              ? "ลบบัญชีออกจากรายการ"
+              : editing?.action === "restore"
+                ? "กู้คืนบัญชี"
+                : editing?.action === "password"
+                  ? "เปลี่ยนรหัสผ่านบัญชี"
+                  : editing?.user.disabled
+                    ? "เปิดใช้งานบัญชี"
+                    : "ปิดใช้งานบัญชี"}
           </DialogTitle>
           <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
-            {editing?.user.displayName} ({editing?.user.username}) ·
-            ไม่ลบประวัติการทำงานของบัญชี
+            {editing?.user.displayName} ({editing?.user.username}) ·{" "}
+            {editing?.action === "delete"
+              ? "บัญชีจะออกจากระบบทุกอุปกรณ์ ประวัติการทำงานจะยังอยู่ และผู้ดูแลกู้คืนบัญชีได้"
+              : editing?.action === "restore"
+                ? "บัญชีจะกลับเข้ารายการในสถานะปิดใช้งาน"
+                : "ระบบเก็บประวัติการทำงานของบัญชีไว้"}
           </DialogDescription>
           {dialogError && (
             <Feedback value={{ kind: "error", text: dialogError }} />
@@ -332,18 +404,27 @@ export function UsersScreen() {
             onSubmit={async (event) => {
               event.preventDefault();
               if (!editing || busy) return;
+              if (
+                editing.action === "delete" &&
+                confirmUsername !== editing.user.username
+              )
+                return;
               setBusy(true);
               setDialogError(null);
               try {
                 const result = await request<{ signedOut: boolean }>(
                   `/api/admin/users/${editing.user.id}`,
                   {
-                    method: "PATCH",
+                    method: editing.action === "delete" ? "DELETE" : "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(
-                      editing.action === "password"
-                        ? { password: newPassword }
-                        : { disabled: !editing.user.disabled },
+                      editing.action === "delete"
+                        ? { confirmUsername }
+                        : editing.action === "restore"
+                          ? { restore: true }
+                          : editing.action === "password"
+                            ? { password: newPassword }
+                            : { disabled: !editing.user.disabled },
                     ),
                   },
                 );
@@ -354,7 +435,13 @@ export function UsersScreen() {
                   router.refresh();
                 } else {
                   setRefresh((value) => value + 1);
-                  toast.success("บันทึกการเปลี่ยนแปลงแล้ว");
+                  toast.success(
+                    editing.action === "delete"
+                      ? "ลบบัญชีแล้ว"
+                      : editing.action === "restore"
+                        ? "กู้คืนบัญชีแล้ว บัญชียังปิดใช้งานอยู่"
+                        : "บันทึกการเปลี่ยนแปลงแล้ว",
+                  );
                 }
               } catch (failure) {
                 setDialogError(
@@ -385,6 +472,24 @@ export function UsersScreen() {
                 />
               </div>
             )}
+            {editing?.action === "delete" && (
+              <div className="field-group">
+                <Label htmlFor="confirm-delete-user">
+                  พิมพ์ชื่อผู้ใช้เพื่อยืนยัน
+                </Label>
+                <Input
+                  id="confirm-delete-user"
+                  value={confirmUsername}
+                  onChange={(event) => setConfirmUsername(event.target.value)}
+                  autoCapitalize="none"
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={40}
+                  required
+                  disabled={busy}
+                />
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
@@ -394,13 +499,27 @@ export function UsersScreen() {
               >
                 ยกเลิก
               </Button>
-              <Button type="submit" disabled={busy}>
+              <Button
+                type="submit"
+                variant={
+                  editing?.action === "delete" ? "destructive" : "default"
+                }
+                disabled={
+                  busy ||
+                  (editing?.action === "delete" &&
+                    confirmUsername !== editing.user.username)
+                }
+              >
                 {busy ? (
                   <BusyLabel>กำลังบันทึก…</BusyLabel>
                 ) : (
                   <>
                     <ShieldCheck />
-                    ยืนยัน
+                    {editing?.action === "delete"
+                      ? "ยืนยันลบบัญชี"
+                      : editing?.action === "restore"
+                        ? "ยืนยันกู้คืน"
+                        : "ยืนยัน"}
                   </>
                 )}
               </Button>

@@ -44,6 +44,7 @@ import { request } from "@/lib/wms";
 export function LabelsScreen() {
   const [kind, setKind] = useState<LabelKind>("location");
   const [format, setFormat] = useState<LabelFormat>("qr");
+  const [paperSize, setPaperSize] = useState<"a4" | "a6">("a4");
   const [keyword, setKeyword] = useState("");
   const [applied, setApplied] = useState("");
   const [page, setPage] = useState(1);
@@ -120,7 +121,7 @@ export function LabelsScreen() {
           action={
             <Button onClick={() => window.print()} disabled={!allReady}>
               <Printer />
-              พิมพ์ {labels.length} ป้าย
+              พิมพ์ {labels.length} ป้าย {paperSize.toUpperCase()}
             </Button>
           }
         />
@@ -266,6 +267,30 @@ export function LabelsScreen() {
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="field-group">
+              <Label htmlFor="label-paper">ขนาดกระดาษ</Label>
+              <Select
+                value={paperSize}
+                onValueChange={(value) =>
+                  setPaperSize(value === "a6" ? "a6" : "a4")
+                }
+              >
+                <SelectTrigger id="label-paper">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="a4">A4 · เครื่องพิมพ์ทั่วไป</SelectItem>
+                  <SelectItem value="a6">
+                    A6 · เครื่องพิมพ์ฉลาก Thermal
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {paperSize === "a6"
+                  ? "105 × 148 มม. · 1 ป้ายต่อแผ่น"
+                  : "210 × 297 มม. · 3 ป้ายต่อแถว"}
+              </p>
+            </div>
+            <div className="field-group">
               <Label htmlFor="label-format">รูปแบบรหัส</Label>
               <Select
                 value={format}
@@ -342,8 +367,8 @@ export function LabelsScreen() {
               </>
             )}
             <p className="text-xs leading-relaxed text-muted-foreground">
-              งานพิมพ์จัดแบบ A4 ให้ตรวจตัวอย่างก่อนพิมพ์จริง
-              และทดสอบการอ่านรหัสกับขนาดกระดาษ/เครื่องพิมพ์ที่ใช้
+              ในหน้าต่างพิมพ์ เลือกขนาดกระดาษให้ตรงกับที่ตั้งไว้ ใช้ขนาดจริง
+              100% ปิดหัวและท้ายกระดาษ แล้วตรวจตัวอย่างก่อนสั่งพิมพ์
             </p>
           </CardContent>
         </Card>
@@ -354,7 +379,9 @@ export function LabelsScreen() {
             <Tag className="size-4 text-muted-foreground" />
             ตัวอย่างป้าย
           </h2>
-          <Badge variant="secondary">{labels.length} ป้าย</Badge>
+          <Badge variant="secondary">
+            {paperSize.toUpperCase()} · {labels.length} ป้าย
+          </Badge>
         </div>
         {!labels.length ? (
           <Card className="labels-controls">
@@ -375,7 +402,12 @@ export function LabelsScreen() {
             </div>
             <div
               data-wms-label-sheet
-              className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+              data-paper-size={paperSize}
+              className={
+                paperSize === "a6"
+                  ? "mx-auto grid w-full max-w-[105mm] gap-4"
+                  : "grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+              }
             >
               {labels.map((item) => (
                 <article
@@ -390,8 +422,8 @@ export function LabelsScreen() {
                     alt={`${format === "qr" ? "QR Code" : "Barcode"} ${item.code}`}
                     className={
                       format === "qr"
-                        ? "my-3 size-36 object-contain"
-                        : "my-3 h-28 w-full object-contain"
+                        ? "wms-label-qr my-3 size-36 object-contain"
+                        : "wms-label-barcode my-3 h-28 w-full object-contain"
                     }
                     onLoad={() => {
                       setReady((previous) =>
@@ -443,7 +475,7 @@ export function LabelsScreen() {
               <Button disabled={!allReady} onClick={() => window.print()}>
                 <Printer />
                 {allReady
-                  ? `พิมพ์ ${labels.length} ป้าย`
+                  ? `พิมพ์ ${labels.length} ป้าย ${paperSize.toUpperCase()}`
                   : "กำลังเตรียมภาพป้าย…"}
               </Button>
             </div>

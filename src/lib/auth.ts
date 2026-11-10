@@ -263,6 +263,12 @@ export async function openSession(
   const jar = await cookies();
   const previous = jar.get(SESSION_COOKIE)?.value;
   await prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { disabled: true },
+    });
+    if (!user || user.disabled)
+      throw new HttpError(401, "บัญชีนี้ยังไม่พร้อมใช้งาน");
     if (previous && /^[a-f0-9]{64}$/.test(previous))
       await tx.userSession.deleteMany({
         where: { tokenHash: digestSession(previous) },

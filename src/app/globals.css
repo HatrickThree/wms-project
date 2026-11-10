@@ -71,9 +71,13 @@
 }
 
 @media print {
-  @page {
+  @page wms-label-a4 {
     size: A4;
     margin: 10mm;
+  }
+  @page wms-label-a6 {
+    size: 105mm 148mm;
+    margin: 5mm;
   }
   body:has([data-wms-label-sheet]) {
     background: white;
@@ -89,10 +93,20 @@
   body:has([data-wms-label-sheet]) main {
     padding: 0 !important;
   }
+  body:has([data-wms-label-sheet]) .page-container > section,
   [data-wms-label-sheet] {
+    margin: 0 !important;
+  }
+  [data-wms-label-sheet][data-paper-size="a4"] {
+    page: wms-label-a4;
     display: grid !important;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     gap: 4mm !important;
+  }
+  [data-wms-label-sheet][data-paper-size="a6"] {
+    page: wms-label-a6;
+    display: block !important;
+    max-width: none;
   }
   .wms-print-label {
     break-inside: avoid;
@@ -108,6 +122,23 @@
   }
   .wms-print-label p {
     color: black;
+  }
+  [data-paper-size="a6"] .wms-print-label {
+    justify-content: center;
+    min-height: 134mm;
+    border: 0;
+    padding: 4mm;
+  }
+  [data-paper-size="a6"] .wms-print-label:not(:last-child) {
+    break-after: page;
+  }
+  [data-paper-size="a6"] .wms-label-qr {
+    width: 48mm;
+    height: 48mm;
+  }
+  [data-paper-size="a6"] .wms-label-barcode {
+    height: 30mm;
+    width: 100%;
   }
 }
 

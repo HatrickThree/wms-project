@@ -5,5 +5,5 @@ export const metadata = { title: "บัญชีผู้ใช้" };
 export default async function Page() {
   const session = await requirePageSession();
   if (session.user.role !== "ADMIN") redirect("/workspaces");
-  return <UsersScreen />;
+  return <UsersScreen currentUserId={session.user.id} />;
 }

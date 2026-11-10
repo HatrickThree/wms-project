@@ -184,6 +184,7 @@ model User {
   passwordHash String
   role UserRole
   disabled Boolean @default(false)
+  deletedAt DateTime?
   createdAt DateTime @default(now())
   sessions UserSession[]
   memberships WorkspaceMember[]

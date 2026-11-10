@@ -1,4 +1,7 @@
-import { requireDisposableDatabase, assertForeignKeysValid } from "./disposable-database.mjs";
+import {
+  requireDisposableDatabase,
+  assertForeignKeysValid,
+} from "./disposable-database.mjs";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { PrismaClient } from "wms-prisma-client";
@@ -94,7 +97,14 @@ try {
     password: adminPassword,
   };
   // Alternate origins no longer require APP_ORIGIN; account checks still apply.
-  await admin.call("/api/auth/setup", { method: "POST", body: setup, headers: { Origin: "https://alternate.example", "Sec-Fetch-Site": "cross-site" } });
+  await admin.call("/api/auth/setup", {
+    method: "POST",
+    body: setup,
+    headers: {
+      Origin: "https://alternate.example",
+      "Sec-Fetch-Site": "cross-site",
+    },
+  });
   assert.ok(
     admin.jar.get("stockspace_session"),
     "HttpOnly session cookie returned",
@@ -391,6 +401,70 @@ try {
     method: "POST",
     body: { username: accounts.staff.username, password: changedPassword },
   });
+  const archivePath = `/api/admin/users/${accounts.staff.id}`;
+  const confirmUsername = accounts.staff.username;
+  const memberships = await db.workspaceMember.findMany({
+    where: { userId: accounts.staff.id },
+    orderBy: { workspaceId: "asc" },
+  });
+  await staff.call(archivePath, {
+    method: "DELETE",
+    body: { confirmUsername },
+    status: 403,
+  });
+  await admin.call(`/api/admin/users/${currentAdmin.id}`, {
+    method: "DELETE",
+    body: { confirmUsername: currentAdmin.username },
+    status: 400,
+  });
+  await admin.call(archivePath, {
+    method: "DELETE",
+    body: { confirmUsername: "qa.wrong" },
+    status: 409,
+  });
+  await admin.call(archivePath, {
+    method: "DELETE",
+    body: { confirmUsername },
+  });
+  await admin.call(archivePath, {
+    method: "DELETE",
+    body: { confirmUsername },
+  });
+  await staff.call("/api/workspaces", { status: 401 });
+  await staff.call("/api/auth/login", {
+    method: "POST",
+    body: { username: confirmUsername, password: changedPassword },
+    status: 401,
+  });
+  const listedUsers = await admin.call("/api/admin/users");
+  assert.ok(!listedUsers.some((user) => user.id === accounts.staff.id));
+  const archivedUsers = await admin.call("/api/admin/users?deleted=1");
+  assert.ok(
+    archivedUsers.find((user) => user.id === accounts.staff.id)?.deletedAt,
+  );
+  assert.deepEqual(
+    await db.workspaceMember.findMany({
+      where: { userId: accounts.staff.id },
+      orderBy: { workspaceId: "asc" },
+    }),
+    memberships,
+  );
+  await admin.call(archivePath, {
+    method: "PATCH",
+    body: { disabled: false },
+    status: 409,
+  });
+  await admin.call(archivePath, { method: "PATCH", body: { restore: true } });
+  await staff.call("/api/auth/login", {
+    method: "POST",
+    body: { username: confirmUsername, password: changedPassword },
+    status: 401,
+  });
+  await admin.call(archivePath, { method: "PATCH", body: { disabled: false } });
+  await staff.call("/api/auth/login", {
+    method: "POST",
+    body: { username: confirmUsername, password: changedPassword },
+  });
   await staff.call("/api/auth/logout", { method: "POST" });
   await staff.call("/api/workspaces", { status: 401 });
   const after = await db.inventoryBalance.aggregate({
@@ -408,7 +482,7 @@ try {
     ),
   );
   console.log(
-    "PASS: first-admin setup, login/logout, role checks, workspace isolation, trusted actors, stale-tab protection, database scope guards, stock balance, account revocation, password rotation, and login throttling. Legacy business balances unchanged.",
+    "PASS: first-admin setup, role checks, workspace isolation, stock balance, session revocation, password rotation, login throttling, and recoverable account deletion with membership preservation.",
   );
 } finally {
   await db.$disconnect();

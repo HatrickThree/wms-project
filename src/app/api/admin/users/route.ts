@@ -9,12 +9,15 @@ const publicUser = {
   displayName: true,
   role: true,
   disabled: true,
+  deletedAt: true,
   createdAt: true,
 } as const;
-export async function GET() {
+export async function GET(request: Request) {
   return apiHandler(async () => {
     await requireAdmin();
+    const deleted = new URL(request.url).searchParams.get("deleted") === "1";
     const users = await prisma.user.findMany({
+      where: { deletedAt: deleted ? { not: null } : null },
       select: publicUser,
       orderBy: { createdAt: "desc" },
     });
